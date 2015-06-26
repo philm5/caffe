@@ -14,21 +14,24 @@ namespace caffe
 		const vector<Blob<Dtype>*>& top)
 	{
 		BaseConvolutionLayer<Dtype>::LayerSetUp(bottom, top);
-		LOG(ERROR) << "FFT Layer performing set up..."; //"max: " << max << " i " << max_i;
+		LOG(ERROR) << "FFT Layer performing set up..."; 
 
-		fftw_complex *in, *out;
-		fftw_plan p;
+		const Dtype* weight = this->blobs_[0]->cpu_data();
+		LOG(ERROR) << *weight;
 
-		in = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)* 1000);
-		out = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)* 1000);
-
-		p = fftw_plan_dft_1d(1000, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
-
-		fftw_execute(p);
-		fftw_destroy_plan(p);
-
-		fftw_free(in);
-		fftw_free(out);
+//		fftw_complex *in, *out;
+//		fftw_plan p;
+//
+//		in = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)* 1000);
+//		out = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)* 1000);
+//
+//		p = fftw_plan_dft_1d(1000, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+//
+//		fftw_execute(p);
+//		fftw_destroy_plan(p);
+//
+//		fftw_free(in);
+//		fftw_free(out);
 	}
 
 	template <typename Dtype>
