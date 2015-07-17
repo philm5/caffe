@@ -38,6 +38,12 @@
             <in>contrastive_loss_layer.cpp</in>
             <in>conv_layer.cpp</in>
             <in>conv_layer_fft.cpp</in>
+            <in>cudnn_conv_layer.cpp</in>
+            <in>cudnn_pooling_layer.cpp</in>
+            <in>cudnn_relu_layer.cpp</in>
+            <in>cudnn_sigmoid_layer.cpp</in>
+            <in>cudnn_softmax_layer.cpp</in>
+            <in>cudnn_tanh_layer.cpp</in>
             <in>data_layer.cpp</in>
             <in>deconv_layer.cpp</in>
             <in>dropout_layer.cpp</in>
@@ -81,9 +87,11 @@
           </df>
           <df name="util">
             <in>benchmark.cpp</in>
+            <in>cudnn.cpp</in>
             <in>db.cpp</in>
             <in>db_leveldb.cpp</in>
             <in>db_lmdb.cpp</in>
+            <in>fft_util.cpp</in>
             <in>im2col.cpp</in>
             <in>insert_splits.cpp</in>
             <in>io.cpp</in>
@@ -134,6 +142,9 @@
         <dependencyChecking>false</dependencyChecking>
         <rebuildPropChanged>false</rebuildPropChanged>
       </toolsSet>
+      <flagsDictionary>
+        <element flagsID="0" commonFlags="-fPIC"/>
+      </flagsDictionary>
       <codeAssistance>
       </codeAssistance>
       <makefileType>
@@ -144,27 +155,35 @@
           <executablePath></executablePath>
         </makeTool>
       </makefileType>
-      <item path="build/src/caffe/proto/caffe.pb.cc" ex="false" tool="1" flavor2="0">
+      <item path="build/src/caffe/proto/caffe.pb.cc" ex="false" tool="1" flavor2="4">
       </item>
       <item path="examples/cifar10/convert_cifar_data.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
+            flavor2="4">
+        <ccTool flags="0">
+        </ccTool>
       </item>
       <item path="examples/cpp_classification/classification.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
+            flavor2="4">
+        <ccTool flags="0">
+        </ccTool>
       </item>
       <item path="examples/mnist/convert_mnist_data.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
+            flavor2="4">
+        <ccTool flags="0">
+        </ccTool>
       </item>
       <item path="examples/siamese/convert_mnist_siamese_data.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
+            flavor2="4">
+        <ccTool flags="0">
+        </ccTool>
       </item>
       <folder path="0/build">
         <ccTool>
@@ -177,2231 +196,480 @@
           </incDir>
         </ccTool>
       </folder>
-      <folder path="0/examples/cifar10">
+      <folder path="0/examples">
         <ccTool>
           <incDir>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>examples/cifar10</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
+            <pElem>../../../anaconda/include</pElem>
+            <pElem>../../../anaconda/include/python2.7</pElem>
+            <pElem>../../../anaconda/lib/python2.7/site-packages/numpy/core/include</pElem>
+            <pElem>/usr/local/include</pElem>
             <pElem>.build_debug/src</pElem>
+            <pElem>src</pElem>
             <pElem>include</pElem>
             <pElem>.</pElem>
           </incDir>
+          <preprocessorList>
+            <Elem>CPU_ONLY</Elem>
+            <Elem>DEBUG</Elem>
+          </preprocessorList>
         </ccTool>
       </folder>
-      <folder path="0/examples/cpp_classification">
+      <folder path="0/src">
         <ccTool>
           <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/opencv2/core</pElem>
-            <pElem>examples/cpp_classification</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>/usr/include/opencv2/imgproc</pElem>
-            <pElem>include</pElem>
+            <pElem>../../../anaconda/include</pElem>
+            <pElem>../../../anaconda/include/python2.7</pElem>
+            <pElem>../../../anaconda/lib/python2.7/site-packages/numpy/core/include</pElem>
+            <pElem>/usr/local/include</pElem>
             <pElem>.build_debug/src</pElem>
+            <pElem>src</pElem>
+            <pElem>include</pElem>
             <pElem>.</pElem>
           </incDir>
+          <preprocessorList>
+            <Elem>CPU_ONLY</Elem>
+            <Elem>DEBUG</Elem>
+          </preprocessorList>
         </ccTool>
       </folder>
-      <folder path="0/examples/mnist">
+      <folder path="0/tools">
         <ccTool>
           <incDir>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/leveldb</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>examples/mnist</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
+            <pElem>../../../anaconda/include</pElem>
+            <pElem>../../../anaconda/include/python2.7</pElem>
+            <pElem>../../../anaconda/lib/python2.7/site-packages/numpy/core/include</pElem>
+            <pElem>/usr/local/include</pElem>
             <pElem>.build_debug/src</pElem>
+            <pElem>src</pElem>
+            <pElem>include</pElem>
             <pElem>.</pElem>
           </incDir>
+          <preprocessorList>
+            <Elem>CPU_ONLY</Elem>
+            <Elem>DEBUG</Elem>
+          </preprocessorList>
         </ccTool>
       </folder>
-      <folder path="0/examples/siamese">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/leveldb</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>examples/siamese</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
-        </ccTool>
-      </folder>
-      <item path="src/caffe/blob.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/blob.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/common.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe</pElem>
-            <pElem>/usr/include/boost/random</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/integer</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/random/detail</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/common.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/data_transformer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/opencv2/core</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe</pElem>
-            <pElem>/usr/include/boost/random</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/integer</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/random/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/data_transformer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/internal_thread.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/system</pElem>
-            <pElem>/usr/include/boost/thread</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/boost/thread/pthread</pElem>
-            <pElem>/usr/include/boost/bind</pElem>
-            <pElem>/usr/include/boost/thread/detail</pElem>
-            <pElem>/usr/include/boost/exception/detail</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/integer</pElem>
-            <pElem>/usr/include/boost/function</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/move/detail</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/ratio/detail</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/boost/chrono/detail</pElem>
-            <pElem>/usr/include/boost/chrono</pElem>
-            <pElem>/usr/include/boost/ratio</pElem>
-            <pElem>/usr/include/boost/optional</pElem>
-            <pElem>/usr/include/boost/functional/hash/detail</pElem>
-            <pElem>/usr/include/boost/atomic/detail</pElem>
-            <pElem>/usr/include/boost/tuple/detail</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/utility</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/internal_thread.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layer_factory.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layer_factory.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/absval_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/accuracy_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/argmax_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/base_conv_layer.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+            flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/base_data_layer.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+            flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/bnll_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/concat_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/contrastive_loss_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/conv_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/conv_layer_fft.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/data_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/opencv2/core</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/integer</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/boost/random/detail</pElem>
-            <pElem>/usr/include/boost/random</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/cudnn_conv_layer.cpp"
+            ex="false"
+            tool="1"
+            flavor2="0">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/deconv_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/cudnn_pooling_layer.cpp"
+            ex="false"
+            tool="1"
+            flavor2="0">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/dropout_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/cudnn_relu_layer.cpp"
+            ex="false"
+            tool="1"
+            flavor2="0">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="src/caffe/layers/cudnn_sigmoid_layer.cpp"
+            ex="false"
+            tool="1"
+            flavor2="0">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="src/caffe/layers/cudnn_softmax_layer.cpp"
+            ex="false"
+            tool="1"
+            flavor2="0">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="src/caffe/layers/cudnn_tanh_layer.cpp"
+            ex="false"
+            tool="1"
+            flavor2="0">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="src/caffe/layers/data_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="src/caffe/layers/deconv_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="src/caffe/layers/dropout_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/dummy_data_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/eltwise_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/eltwise_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/euclidean_loss_layer.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+            flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/exp_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/filter_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/filter_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/flatten_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/flatten_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/hdf5_data_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/hdf5_output_layer.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+            flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/hinge_loss_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/im2col_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/im2col_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/image_data_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/opencv2/core</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost/random</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/random/detail</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/integer</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/infogain_loss_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/inner_product_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/log_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/loss_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/lrn_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/lrn_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/memory_data_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/opencv2/core</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/multinomial_logistic_loss_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/mvn_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/neuron_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/neuron_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/pooling_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/power_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/prelu_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/prelu_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/reduction_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/relu_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/reshape_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/sigmoid_cross_entropy_loss_layer.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+            flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/sigmoid_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/silence_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/slice_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/softmax_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/softmax_loss_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/split_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/split_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/spp_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/layers/tanh_layer.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/layers/tanh_layer.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/threshold_layer.cpp"
             ex="false"
             tool="1"
             flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+        <ccTool flags="0">
         </ccTool>
       </item>
       <item path="src/caffe/layers/window_data_layer.cpp"
             ex="false"
             tool="1"
-            flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/opencv2/core</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>src/caffe/layers</pElem>
-            <pElem>/usr/include/boost/random</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/opencv2/highgui</pElem>
-            <pElem>/usr/include/opencv2/imgproc</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/integer</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/boost/random/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+            flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/net.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>src/gtest</pElem>
-            <pElem>include/caffe/test</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/net.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/solver.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>src/caffe</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/solver.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/syncedmem.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>src/caffe</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/syncedmem.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/util/benchmark.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>src/caffe/util</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/benchmark.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/util/db.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>include/caffe/util</pElem>
-            <pElem>src/caffe/util</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>/usr/include/leveldb</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/cudnn.cpp" ex="false" tool="1" flavor2="0">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/util/db_leveldb.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/leveldb</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>src/caffe/util</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/db.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/util/db_lmdb.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>src/caffe/util</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/db_leveldb.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/util/im2col.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>src/caffe/util</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/db_lmdb.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/util/insert_splits.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe/util</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/fft_util.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/util/io.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/google/protobuf/io</pElem>
-            <pElem>/usr/include/opencv2/core</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>src/caffe/util</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/opencv2/highgui</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>/usr/include/opencv2/imgproc</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/im2col.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/util/math_functions.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/boost/format</pElem>
-            <pElem>/usr/include/boost/math/special_functions</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>src/caffe/util</pElem>
-            <pElem>/usr/include/boost/random</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/random/detail</pElem>
-            <pElem>/usr/include/boost/optional</pElem>
-            <pElem>/usr/include/boost/math/tools/detail</pElem>
-            <pElem>/usr/include/boost/utility</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/math/special_functions/detail</pElem>
-            <pElem>/usr/include/boost/math/constants</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/format/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/integer</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/fusion/tuple/detail/preprocessed</pElem>
-            <pElem>/usr/include/boost/fusion/support</pElem>
-            <pElem>/usr/include/boost/fusion/container/generation</pElem>
-            <pElem>/usr/include/boost/fusion/iterator</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/insert_splits.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="src/caffe/util/upgrade_proto.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>src/caffe/util</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>/usr/include/google/protobuf/io</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/io.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/caffe.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/function</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/iterator</pElem>
-            <pElem>/usr/include/boost/utility</pElem>
-            <pElem>/usr/include/boost/range/algorithm</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/math_functions.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/compute_image_mean.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="src/caffe/util/upgrade_proto.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/convert_imageset.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/random</pElem>
-            <pElem>/usr/include/boost/random/detail</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/integer</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>../../../anaconda/include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="tools/caffe.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/device_query.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>include</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="tools/compute_image_mean.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/extract_features.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/function</pElem>
-            <pElem>/usr/include/boost/smart_ptr/detail</pElem>
-            <pElem>/usr/include/boost/smart_ptr</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/iterator</pElem>
-            <pElem>/usr/include/boost/utility</pElem>
-            <pElem>/usr/include/boost/range/algorithm</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="tools/convert_imageset.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/finetune_net.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="tools/device_query.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/net_speed_benchmark.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="tools/extract_features.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/test_net.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="tools/finetune_net.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/train_net.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include/caffe/util</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="tools/net_speed_benchmark.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/upgrade_net_proto_binary.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>include/caffe/util</pElem>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="tools/test_net.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
-      <item path="tools/upgrade_net_proto_text.cpp" ex="false" tool="1" flavor2="0">
-        <ccTool>
-          <incDir>
-            <pElem>include/caffe/util</pElem>
-            <pElem>tools</pElem>
-            <pElem>/usr/include/boost/config</pElem>
-            <pElem>/usr/include/boost/exception</pElem>
-            <pElem>/usr/include/boost</pElem>
-            <pElem>/usr/include/boost/detail</pElem>
-            <pElem>/usr/include/boost/type_traits/detail</pElem>
-            <pElem>/usr/include/boost/date_time</pElem>
-            <pElem>/usr/include/boost/mpl/aux_</pElem>
-            <pElem>/usr/include/boost/mpl</pElem>
-            <pElem>/usr/include/boost/mpl/aux_/preprocessed/gcc</pElem>
-            <pElem>/usr/include/boost/date_time/gregorian</pElem>
-            <pElem>/usr/include/boost/date_time/posix_time</pElem>
-            <pElem>/usr/include/boost/iterator/detail</pElem>
-            <pElem>/usr/include/boost/range</pElem>
-            <pElem>/usr/include/boost/range/detail</pElem>
-            <pElem>/usr/include/boost/concept/detail</pElem>
-            <pElem>/usr/include/boost/algorithm/string</pElem>
-            <pElem>/usr/include/boost/algorithm/string/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion/detail</pElem>
-            <pElem>/usr/include/boost/numeric/conversion</pElem>
-            <pElem>/usr/include/boost/math/tools</pElem>
-            <pElem>/usr/include/boost/math/policies</pElem>
-            <pElem>/usr/include/boost/container</pElem>
-            <pElem>/usr/include/boost/type_traits</pElem>
-            <pElem>/usr/include/gflags</pElem>
-            <pElem>/usr/include/glog</pElem>
-            <pElem>/usr/include/google/protobuf/stubs</pElem>
-            <pElem>/usr/include/google/protobuf</pElem>
-            <pElem>include/caffe</pElem>
-            <pElem>.build_debug/src/caffe/proto</pElem>
-            <pElem>include</pElem>
-            <pElem>.build_debug/src</pElem>
-            <pElem>.</pElem>
-          </incDir>
+      <item path="tools/train_net.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="tools/upgrade_net_proto_binary.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
+        </ccTool>
+      </item>
+      <item path="tools/upgrade_net_proto_text.cpp" ex="false" tool="1" flavor2="4">
+        <ccTool flags="0">
         </ccTool>
       </item>
     </conf>

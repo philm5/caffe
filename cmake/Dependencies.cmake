@@ -43,6 +43,12 @@ find_package(Snappy REQUIRED)
 include_directories(SYSTEM ${Snappy_INCLUDE_DIR})
 list(APPEND Caffe_LINKER_LIBS ${Snappy_LIBRARIES})
 
+# ---[ fftw
+find_package(FFTW REQUIRED)
+list(APPEND Caffe_LINKER_LIBS ${FFTW_LIBRARIES})
+find_package(FFTWF REQUIRED)
+list(APPEND Caffe_LINKER_LIBS ${FFTWF_LIBRARIES})
+
 # ---[ CUDA
 include(cmake/Cuda.cmake)
 if(NOT HAVE_CUDA)

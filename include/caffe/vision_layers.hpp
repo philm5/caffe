@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <complex>
 
 #include "caffe/blob.hpp"
 #include "caffe/common.hpp"
@@ -179,14 +180,35 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 public:
-        explicit ConvolutionLayerFFT(const LayerParameter& param) : ConvolutionLayer<Dtype>(param) {}
+    explicit ConvolutionLayerFFT(const LayerParameter& param) : ConvolutionLayer<Dtype>(param) {}
+    
+    virtual inline const char* type() const { return "Convolution"; }    
 
-	virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
-        
-        virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+    virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
+    
+    virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
             const vector<Blob<Dtype>*>& top);
-
-	virtual inline const char* type() const { return "Convolution"; }
+        
+protected:            
+    /**
+     * @brief Performs fft-specific set-up for the layer...
+     */
+    virtual void fft_set_up();
+    
+    /**
+     * @brief begins the forward propagation...
+     */
+    virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+    
+    // fft only variables...
+    int fft_width_, fft_height_;
+    int fft_real_size_, fft_complex_size_;
+    
+    Dtype *fft_weights_in_real_;
+    std::complex<Dtype> *fft_weights_out_complex_;
+    
+    void *fft_weight_plan_;
 };
 
 /**
