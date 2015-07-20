@@ -37,4 +37,27 @@ namespace caffe
     {
         fftw_execute((const fftw_plan)plan_handle);
     }
+
+    bool check_power_of_2(unsigned int n)
+    {
+        // source see: http://graphics.stanford.edu/~seander/bithacks.html#DetermineIfPowerOf2
+        // zero will be recognized as power of 2 (incorrectly.) But no input dim should be zero...
+        return (n & (n - 1)) == 0;
+    }
+
+    unsigned int next_power_of_2(unsigned int n)
+    {
+        // source see: http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+
+        //compute the next highest power of 2 of 32-bit v
+        n--;
+        n |= n >> 1;
+        n |= n >> 2;
+        n |= n >> 4;
+        n |= n >> 8;
+        n |= n >> 16;
+        n++;
+
+        return n;
+    }
 }

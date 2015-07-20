@@ -200,6 +200,12 @@ protected:
      */
     virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
+
+
+    /**
+     * @brief Converts the weights via the fft. This is just done the first time. (Because the weights stay the same)
+     */
+    virtual void convert_weights_fft();
     
     // fft only variables...
     int fft_width_, fft_height_;
@@ -209,6 +215,7 @@ protected:
     std::complex<Dtype> *fft_weights_out_complex_;
     
     void *fft_weight_plan_;
+    bool weights_converted = false;
 };
 
 /**

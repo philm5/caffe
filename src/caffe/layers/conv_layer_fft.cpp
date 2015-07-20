@@ -9,6 +9,9 @@
 #include "caffe/vision_layers.hpp"
 #include "fftw3.h"
 
+#include <iostream> // library that contain basic input/output functions
+#include <fstream>  // library that contains file input/output functions
+
 namespace caffe 
 {
 	template <typename Dtype>
@@ -37,8 +40,24 @@ namespace caffe
             LOG(ERROR) << "ConvolutionLayerFFT::fft_set_up"; 
             
             // set fft width and height to be the image width and height (for now without padding...)
-            this->fft_width_ = this->width_;
-            this->fft_height_ = this->height_;
+            // Check if width and height is a power of 2. If not, round up to the next power of 2.
+            if(!check_power_of_2(this->width_))
+            {
+                this->fft_width_ = next_power_of_2(this->width_);
+            }
+            else
+            {
+                this->fft_width_ = this->width_;
+            }
+
+            if(!check_power_of_2(this->height_))
+            {
+                this->fft_height_ = next_power_of_2(this->height_);
+            }
+            else
+            {
+                this->fft_height_ = this->height_;
+            }
             
             // for sizes see: http://www.fftw.org/doc/Multi_002dDimensional-DFTs-of-Real-Data.html
             this->fft_real_size_ = this->fft_height_ * this->fft_width_;
@@ -66,12 +85,33 @@ namespace caffe
         {
             // my custom fft code    
             LOG(ERROR) << "ConvolutionLayerFFT::Forward_cpu. now ffting the weights to complex....";
+            this->convert_weights_fft();
+
+            LOG(ERROR) << "converted...?";
+
+
+
+            LOG(ERROR) << "calling base: ConvolutionLayer::Forward_cpu";       
+            // inherited things to do...
+            ConvolutionLayer<Dtype>::Forward_cpu(bottom, top);
+        }
+
+        template <typename Dtype>
+        void ConvolutionLayerFFT<Dtype>::convert_weights_fft()
+        {
+            if (weights_converted)
+            {
+                // if weights were converted alrdy don't do that again :)
+                return;
+            }
 
             // the data location of the weights before the conversion...
             auto cpu_data = this->blobs_[0]->cpu_data();
 
             int num_weights = this->num_output_ * (this->channels_ / this->group_);
-            caffe_memset(this->fft_complex_size_* num_weights * sizeof(std::complex<Dtype>), 0., fft_weights_out_complex_);
+            caffe_memset(this->fft_real_size_ * num_weights * sizeof(Dtype), 0., this->fft_weights_in_real_);
+            caffe_memset(this->fft_complex_size_* num_weights * sizeof(std::complex<Dtype>), 0., this->fft_weights_out_complex_);
+
 
             //int num_weights = this->num_output_ * (this->channels_ / this->group_);
 
@@ -111,35 +151,43 @@ namespace caffe
                     }
                 }
             }
-            
+
             fft_execute_plan<Dtype>(this->fft_weight_plan_);
-            
-            LOG(ERROR) << "converted...?";
+            weights_converted = true;
 
-            
-            
-            LOG(ERROR) << "calling base: ConvolutionLayer::Forward_cpu";       
-            // inherited things to do...
-            ConvolutionLayer<Dtype>::Forward_cpu(bottom, top);
+            // output the weights to txt:
+            /*
+            std::ofstream fout("real_in.txt"); //opening an output stream for file test.txt
+            if(fout.is_open())
+            {
+                //file opened successfully so we are here
+                std::cout << "File Opened successfully!!!. Writing data from array to file" << std::endl;
+
+                for(int i = 0; i < this->fft_real_size_* num_weights; i++)
+                {
+                    fout << this->fft_weights_in_real_[i] << "\n"; //writing ith character of array in the file
+                }
+                std::cout << "Array data successfully saved into the file test.txt" << std::endl;
+            }
+
+            fout.close();
+
+            std::ofstream foutc("complex_out.txt"); //opening an output stream for file test.txt
+            if(foutc.is_open())
+            {
+                //file opened successfully so we are here
+                std::cout << "File Opened successfully!!!. Writing data from array to file" << std::endl;
+
+                for(int i = 0; i < this->fft_complex_size_ * num_weights; i++)
+                {
+                    foutc << this->fft_weights_out_complex_[i].real() << ";" << this->fft_weights_out_complex_[i].imag() << "\n"; //writing ith character of array in the file
+                }
+                std::cout << "Array data successfully saved into the file test.txt" << std::endl;
+            }
+
+            foutc.close();
+         */
         }
-
-        
-        
-
-
-//		fftw_complex *in, *out;
-//		fftw_plan p;
-//
-//		in = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)* 1000);
-//		out = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)* 1000);
-//
-//		p = fftw_plan_dft_1d(1000, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
-//
-//		fftw_execute(p);
-//		fftw_destroy_plan(p);
-//
-//		fftw_free(in);
-//		fftw_free(out);
 
 //#ifdef CPU_ONLY
 //	STUB_GPU(ConvolutionLayerFFT);

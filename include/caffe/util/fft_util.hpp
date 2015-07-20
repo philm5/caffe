@@ -21,6 +21,10 @@ namespace caffe
     
     template<typename Dtype>
     void fft_execute_plan(const void *plan_handle);
+
+    bool check_power_of_2(unsigned int n);
+
+    unsigned int next_power_of_2(unsigned int n);
 }
 
 
