@@ -206,16 +206,33 @@ protected:
      * @brief Converts the weights via the fft. This is just done the first time. (Because the weights stay the same)
      */
     virtual void convert_weights_fft();
-    
+
+    /**
+     * @brief Transforms blob data to the padded real data array for use in fft.
+     */
+    void transform_blob_to_real_array(int N, int K, int H, int W, const Dtype *blob_data, Dtype *padded_real_data);
+
+    /**
+     * @brief Converts the input values to complex.
+     */
+    virtual void convert_bottom(const vector<Blob<Dtype>*>& bottom);
+
+    virtual void write_arr_to_disk(const char* output_name, int size, void *arr, bool is_complex = false);
+
     // fft only variables...
     int fft_width_, fft_height_;
     int fft_real_size_, fft_complex_size_;
     
     Dtype *fft_weights_in_real_;
     std::complex<Dtype> *fft_weights_out_complex_;
-    
+
+    // plans are void* because they can be fftw_plan or fftwf_plan...
     void *fft_weight_plan_;
+    void *fft_input_plan_;
     bool weights_converted = false;
+
+    Dtype *fft_input_real_;
+    std::complex<Dtype> *fft_input_complex_;
 };
 
 /**
