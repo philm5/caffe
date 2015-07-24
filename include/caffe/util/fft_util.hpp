@@ -21,6 +21,9 @@ namespace caffe
 
     template<typename Dtype>
     void *fft_plan_many_dft_r2c_2d(int n0, int n1, int how_many, Dtype *in, std::complex<Dtype> *out, unsigned flags);
+
+    template<typename Dtype>
+    void *fft_plan_many_dft_c2r_2d(int n0, int n1, int how_many, std::complex<Dtype> *in, Dtype *out, unsigned flags);
     
     template<typename Dtype>
     void fft_execute_plan(const void *plan_handle);
