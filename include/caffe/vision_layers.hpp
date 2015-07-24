@@ -208,9 +208,14 @@ protected:
     virtual void convert_weights_fft();
 
     /**
+     * @brief Multiplies the converted fft values to do the convolution
+     */
+    virtual void convolve_fft();
+
+    /**
      * @brief Transforms blob data to the padded real data array for use in fft.
      */
-    void transform_blob_to_real_array(int N, int K, int H, int W, const Dtype *blob_data, Dtype *padded_real_data);
+    virtual void transform_blob_to_real_array(int N, int K, int H, int W, const Dtype *blob_data, Dtype *padded_real_data);
 
     /**
      * @brief Converts the input values to complex.
@@ -229,10 +234,15 @@ protected:
     // plans are void* because they can be fftw_plan or fftwf_plan...
     void *fft_weight_plan_;
     void *fft_input_plan_;
+    void *ifft_plan_;
     bool weights_converted = false;
 
     Dtype *fft_input_real_;
     std::complex<Dtype> *fft_input_complex_;
+
+    // results
+    std::complex<Dtype> *fft_conv_result_complex_;
+    Dtype *fft_conv_result_real_;
 };
 
 /**

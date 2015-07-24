@@ -88,6 +88,13 @@ namespace caffe
 
             // The plan to compute the input values to complex
             fft_input_plan_ = fft_plan_many_dft_r2c_2d<Dtype>(fft_height_, fft_width_, K, fft_input_real_, fft_input_complex_, FFTW_ESTIMATE);
+
+            // Allocations for result
+            fft_conv_result_complex_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(weight_alloc_size_out));
+            fft_conv_result_real_ = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(weight_alloc_size_in));
+
+            // The plan. Is a plan for the actual conversion. Conversion will be done when weights are rdy...
+            ifft_plan_ = fft_plan_many_dft_c2r_2d<Dtype>(fft_height_, fft_width_, num_weights, fft_conv_result_complex_, fft_conv_result_real_, FFTW_ESTIMATE);
         }
         
         template <typename Dtype>        
@@ -100,11 +107,29 @@ namespace caffe
 
             LOG(ERROR) << "converted...?";
 
+            clock_t begin_clock = std::clock();
+            this->convolve_fft();
+            clock_t end_clock = std::clock();
+            LOG(ERROR) << "fft convolve took " << 1000.0 * (end_clock-begin_clock) / CLOCKS_PER_SEC << " ms.";
 
+
+            begin_clock = std::clock();
+            fft_execute_plan<Dtype>(this->ifft_plan_);
+            end_clock = std::clock();
+
+            // TODO: free complex memory!
+            // TODO: forward into top? mutable_cpu_data
+            // TODO: delete all plans? all memory?
+
+            LOG(ERROR) << "ifft took " << 1000.0 * (end_clock-begin_clock) / CLOCKS_PER_SEC << " ms.";
+
+            int N = this->num_output_;
+            int K = (this->channels_ / this->group_);
+            this->write_arr_to_disk("conv_res_real.txt", N*K , this->fft_conv_result_real_);
 
             LOG(ERROR) << "calling base: ConvolutionLayer::Forward_cpu";       
             // inherited things to do...
-            ConvolutionLayer<Dtype>::Forward_cpu(bottom, top);
+           //  ConvolutionLayer<Dtype>::Forward_cpu(bottom, top);
         }
 
         template <typename Dtype>
@@ -114,15 +139,21 @@ namespace caffe
             auto shape =  bottom[0]->shape();
 
             LOG(ERROR) << "start of conversion of bottom data...";
-            this->transform_blob_to_real_array(shape[0], shape[1], shape[2], shape[3], input_data_blob, fft_input_real_);
+            this->transform_blob_to_real_array(shape[0], shape[1], shape[2], shape[3], input_data_blob, this->fft_input_real_);
 
-            caffe_memset(this->fft_complex_size_* shape[0] * shape[1] * sizeof(std::complex<Dtype>), 0., fft_input_complex_);
+            caffe_memset(this->fft_complex_size_* shape[0] * shape[1] * sizeof(std::complex<Dtype>), 0., this->fft_input_complex_);
 
             clock_t begin_clock = std::clock();
             fft_execute_plan<Dtype>(this->fft_input_plan_);
             clock_t end_clock = std::clock();
 
-            LOG(ERROR) << "fft for one layer took " << 1000.0 * (end_clock-begin_clock) / CLOCKS_PER_SEC << " ms.";
+            // TODO: free real memory!
+
+            LOG(ERROR) << "fft for bottom data took " << 1000.0 * (end_clock-begin_clock) / CLOCKS_PER_SEC << " ms.";
+
+
+            this->write_arr_to_disk("input_real_in.txt", shape[0] * shape[1], this->fft_input_real_);
+            this->write_arr_to_disk("input_complex_out.txt", shape[0] * shape[1], this->fft_input_complex_, true);
 
         }
 
@@ -194,12 +225,64 @@ namespace caffe
             fft_execute_plan<Dtype>(this->fft_weight_plan_);
             clock_t end_clock = std::clock();
 
+            // TODO: free real memory!
+
             LOG(ERROR) << "fft for one layer took " << 1000.0 * (end_clock - begin_clock) / CLOCKS_PER_SEC << " ms.";
             weights_converted = true;
 
             // output the weights to txt:
-            // this->write_arr_to_disk("real_in.txt", N * K, this->fft_weights_in_real_);
-            // this->write_arr_to_disk("complex_out.txt", N * K, this->fft_weights_out_complex_, true);
+            this->write_arr_to_disk("weights_real_in.txt", N * K, this->fft_weights_in_real_);
+            this->write_arr_to_disk("weights_complex_out.txt", N * K, this->fft_weights_out_complex_, true);
+        }
+
+        template <typename Dtype>
+        void ConvolutionLayerFFT<Dtype>::convolve_fft()
+        {
+            // fft_input_complex_:           1x3x256x256
+            // fft_weights_out_complex_:    96x3x256x256
+
+            // weights and inputs are stored in the memory like this (each k is of size 256x256 [in 1st layer only])
+            // n=0   |n=1   |n=2   |n=3   |n=4
+            // k0k1k2|k0k1k2|k0k1k2|k0k1k2|k0k1k2
+
+            // loop through channels.
+            int N = this->num_output_;
+            int K = (this->channels_ / this->group_);
+            int H = this->fft_height_;
+            int W = this->fft_width_;
+            for (int k = 0; k < K; ++k)
+            {
+                // loop through weights
+                for (int n = 0; n < N; ++n)
+                {
+                    std::complex<Dtype> *ptr_input = fft_input_complex_ + (k * this->fft_real_size_);
+
+                    int offset = (n * K + k) * this->fft_complex_size_;
+                    std::complex<Dtype> *ptr_weight = this->fft_weights_out_complex_ + offset;
+                    std::complex<Dtype> *ptr_res = this->fft_conv_result_complex_ + offset;
+                    for (int h = 0; h < H; h++)
+                    {
+                        for (int w = 0; w < W; w++)
+                        {
+                            // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
+                            // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
+                            Dtype a = ptr_input->real();
+                            Dtype b = ptr_input->imag();
+                            Dtype c = ptr_weight->real();
+                            Dtype d = ptr_weight->imag();
+
+                            std::complex<Dtype> res(a * c - b * d, b * c + a * d);
+                            *ptr_res = res;
+
+                            ++ptr_input;
+                            ++ptr_weight;
+                            ++ptr_res;
+                        }
+                    }
+                }
+            }
+
+            this->write_arr_to_disk("conv_res_complex.txt", N * K, this->fft_conv_result_complex_, true);
         }
 
         template <typename Dtype>
@@ -222,7 +305,7 @@ namespace caffe
                     else
                     {
                         auto arr_conv = reinterpret_cast<Dtype *>(arr);
-                        fout << arr_conv << "\n";
+                        fout << *(arr_conv + i) << "\n";
                     }
                 }
                 std::cout << "Array data successfully saved into the file " << output_name << std::endl;
