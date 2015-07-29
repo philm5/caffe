@@ -123,13 +123,16 @@ namespace caffe
 
             LOG(ERROR) << "ifft took " << 1000.0 * (end_clock-begin_clock) / CLOCKS_PER_SEC << " ms.";
 
-            int N = this->num_output_;
-            int K = (this->channels_ / this->group_);
-            this->write_arr_to_disk("conv_res_real.txt", N*K , this->fft_conv_result_real_);
+            this->normalize_ifft_result(top);
+            //int N = this->num_output_;
+            //int K = (this->channels_ / this->group_);
+            //this->write_arr_to_disk("conv_res_real.txt", N*K , this->fft_conv_result_real_);
 
-            LOG(ERROR) << "calling base: ConvolutionLayer::Forward_cpu";       
+            this->write_simple_arr_to_disk("top_data.txt", this->num_output_ * this->height_out_ * this->width_out_, top[0]->mutable_cpu_data());
+
+            LOG(ERROR) << "calling base: ConvolutionLayer::Forward_cpu";
             // inherited things to do...
-           //  ConvolutionLayer<Dtype>::Forward_cpu(bottom, top);
+            //  ConvolutionLayer<Dtype>::Forward_cpu(bottom, top);
         }
 
         template <typename Dtype>
@@ -152,9 +155,8 @@ namespace caffe
             LOG(ERROR) << "fft for bottom data took " << 1000.0 * (end_clock-begin_clock) / CLOCKS_PER_SEC << " ms.";
 
 
-            this->write_arr_to_disk("input_real_in.txt", shape[0] * shape[1], this->fft_input_real_);
+            // this->write_arr_to_disk("input_real_in.txt", shape[0] * shape[1], this->fft_input_real_);
             this->write_arr_to_disk("input_complex_out.txt", shape[0] * shape[1], this->fft_input_complex_, true);
-
         }
 
         template <typename Dtype>
@@ -207,15 +209,31 @@ namespace caffe
                 return;
             }
 
+            // ===============================
+
+            // set all weights to 1.0 for testing purposes
+            int weight_size = this->height_ * this->width_;
+            // Allocations & plan for weights
+            int num_weights = this->num_output_ * (this->channels_ / this->group_);
+            int weight_alloc_size_in = weight_size * num_weights;
+            Dtype* cpu_data = reinterpret_cast<Dtype *>(malloc(weight_alloc_size_in * sizeof(Dtype)));
+            for (int j = 0; j < weight_alloc_size_in; ++j)
+            {
+                cpu_data[j] = 1.0;
+            }
+
             // the data location of the weights before the conversion...
-            auto cpu_data = this->blobs_[0]->cpu_data();
+            // auto cpu_data = this->blobs_[0]->cpu_data();
+
+
+            // ===============================
 
             // transform data to real
             int N = this->num_output_;
             int K = (this->channels_ / this->group_);
             int H = this->kernel_h_;
             int W = this->kernel_w_;
-            this->transform_blob_to_real_array(N, K, H, W, cpu_data, fft_weights_in_real_);
+            this->transform_blob_to_real_array(N, K, H, W, cpu_data, this->fft_weights_in_real_);
 
             // set complex mem to 0
             caffe_memset(this->fft_complex_size_ * N * K * sizeof(std::complex<Dtype>), 0.,
@@ -231,7 +249,7 @@ namespace caffe
             weights_converted = true;
 
             // output the weights to txt:
-            this->write_arr_to_disk("weights_real_in.txt", N * K, this->fft_weights_in_real_);
+            // this->write_arr_to_disk("weights_real_in.txt", N * K, this->fft_weights_in_real_);
             this->write_arr_to_disk("weights_complex_out.txt", N * K, this->fft_weights_out_complex_, true);
         }
 
@@ -255,14 +273,14 @@ namespace caffe
                 // loop through weights
                 for (int n = 0; n < N; ++n)
                 {
-                    std::complex<Dtype> *ptr_input = fft_input_complex_ + (k * this->fft_real_size_);
+                    std::complex<Dtype> *ptr_input = fft_input_complex_ + (k * this->fft_complex_size_);
 
                     int offset = (n * K + k) * this->fft_complex_size_;
                     std::complex<Dtype> *ptr_weight = this->fft_weights_out_complex_ + offset;
                     std::complex<Dtype> *ptr_res = this->fft_conv_result_complex_ + offset;
                     for (int h = 0; h < H; h++)
                     {
-                        for (int w = 0; w < W; w++)
+                        for (int w = 0; w < (W / 2) + 1; w++)
                         {
                             // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
                             // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
@@ -283,6 +301,47 @@ namespace caffe
             }
 
             this->write_arr_to_disk("conv_res_complex.txt", N * K, this->fft_conv_result_complex_, true);
+        }
+
+        template <typename Dtype>
+        void ConvolutionLayerFFT<Dtype>::normalize_ifft_result(const vector<Blob<Dtype>*>& top)
+        {
+            auto top_data = top[0]->mutable_cpu_data();
+            Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
+
+            // TODO: do the following right... :)
+            int N = this->num_output_;
+            int K = (this->channels_ / this->group_);
+            for (int k = 0; k < K; ++k)
+            {
+                for (int n = 0; n < N; ++n)
+                {
+                    int offset_res_real = (n * K + k) * this->fft_real_size_ ;
+
+                    for (int h = 0; h < this->height_out_; ++h) // =55 in 1st layer
+                    {
+                        // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
+                        // idx (kernel_h_ - 1). The stride times the idx of the output pixel will be added onto this.
+                        int h_idx = (this->kernel_h_ - 1) + h * this->stride_h_;
+                        for (int w = 0; w < this->width_out_; ++w) // =55 in 1st layer
+                        {
+                            // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
+                            // idx (kernel_w_ - 1). The stride times the idx of the output pixel will be added onto this.
+                            int w_idx = (this->kernel_w_ - 1) + w * this->stride_w_;
+                            //((n * K + k) * H + h) * W + w;
+                            int top_data_idx = (n * this->height_out_ + h) * this->width_out_ + w;
+
+                            // the index in the data of the convolution result array (the real one)
+                            int res_data_idx = offset_res_real + h_idx * this->fft_width_ + w_idx;
+
+                            // normalize fft and sum up everything from the input channels...
+                            top_data[top_data_idx] += this->fft_conv_result_real_[res_data_idx] * ifft_normalize_factor;
+                        }
+
+                    }
+
+                }
+            }
         }
 
         template <typename Dtype>
@@ -307,6 +366,25 @@ namespace caffe
                         auto arr_conv = reinterpret_cast<Dtype *>(arr);
                         fout << *(arr_conv + i) << "\n";
                     }
+                }
+                std::cout << "Array data successfully saved into the file " << output_name << std::endl;
+            }
+
+            fout.close();
+        }
+
+        template <typename Dtype>
+        void ConvolutionLayerFFT<Dtype>::write_simple_arr_to_disk(const char* output_name, int size, Dtype *arr)
+        {
+            std::ofstream fout(output_name); //opening an output stream for file test.txt
+            if(fout.is_open())
+            {
+                //file opened successfully so we are here
+                std::cout << "File Opened successfully!!!. Writing data from array to file" << std::endl;
+
+                for(int i = 0; i < size; i++)
+                {
+                    fout << *(arr + i) << "\n";
                 }
                 std::cout << "Array data successfully saved into the file " << output_name << std::endl;
             }

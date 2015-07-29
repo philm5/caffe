@@ -175,6 +175,8 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual inline bool reverse_dimensions() { return false; }
   virtual void compute_output_shape();
+
+    void write_simple_arr_to_disk(const char *output_name, int size, Dtype *arr);
 };
 
 template <typename Dtype>
@@ -213,6 +215,11 @@ protected:
     virtual void convolve_fft();
 
     /**
+     * @brief Normalizes the ifft result and writes it to the top layer.
+     */
+    virtual void normalize_ifft_result(const vector<Blob<Dtype>*>& top);
+
+    /**
      * @brief Transforms blob data to the padded real data array for use in fft.
      */
     virtual void transform_blob_to_real_array(int N, int K, int H, int W, const Dtype *blob_data, Dtype *padded_real_data);
@@ -243,6 +250,8 @@ protected:
     // results
     std::complex<Dtype> *fft_conv_result_complex_;
     Dtype *fft_conv_result_real_;
+
+    void write_simple_arr_to_disk(const char *output_name, int size, Dtype *arr);
 };
 
 /**

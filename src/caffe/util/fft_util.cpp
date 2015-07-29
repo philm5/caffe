@@ -31,18 +31,17 @@ namespace caffe
     {
         int rank = 2;
         int n[] = {n0, n1};
-        int idist = n[0] * n[1]; /* = 256*256, the distance in memory
+        int idist = n0 * n1; /* = 256*256, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
         int istride = 1; /* array is contiguous in memory */
-        int *inembed = n;
+        int *inembed = nullptr;
 
         // out
-        int n_out[] = {n0, n1 / 2 + 1};
-        int odist = n_out[0] * n_out[1];
+        int odist = n0 * (n1 / 2 + 1);
         int ostride = 1;
-        int *onembed = n_out;
+        int *onembed = nullptr;
 
         return reinterpret_cast<void *>(fftwf_plan_many_dft_r2c(rank, n, how_many, in, inembed, istride, idist,
                                                                 reinterpret_cast<fftwf_complex *>(out), onembed, ostride,
@@ -60,21 +59,21 @@ namespace caffe
     void *fft_plan_many_dft_c2r_2d<float>(int n0, int n1, int how_many, std::complex<float> *in, float *out, unsigned flags)
     {
         int rank = 2;
-        int n[] = {n0, n1 / 2 + 1};
-        int idist = n[0] * n[1]; /* = 256*129, the distance in memory
+        int n[] = {n0, n1};
+        int idist = n0 * (n1 / 2 + 1); /* = 256*129, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
         int istride = 1; /* array is contiguous in memory */
-        int *inembed = n;
+        int *inembed = nullptr;
 
         // out
-        int n_out[] = {n0, n1};
-        int odist = n_out[0] * n_out[1];
+        int odist = n0 * n1;
         int ostride = 1;
-        int *onembed = n_out;
+        int *onembed = nullptr;
 
 
+        // return reinterpret_cast<void *>(fftwf_plan_dft_c2r_2d(n0, n1, reinterpret_cast<fftwf_complex *>(in), out, flags));
         return reinterpret_cast<void *>(fftwf_plan_many_dft_c2r(rank, n, how_many, reinterpret_cast<fftwf_complex *>(in), inembed, istride, idist,
                                                                 out, onembed, ostride,
                                                                 odist, flags));
