@@ -171,7 +171,7 @@ ifneq ($(CPU_ONLY), 1)
 endif
 LIBRARIES += glog gflags protobuf leveldb snappy \
 	lmdb boost_system hdf5_hl hdf5 m \
-	opencv_core opencv_highgui opencv_imgproc fftw3 fftw3f
+	opencv_core opencv_highgui opencv_imgproc
 PYTHON_LIBRARIES := boost_python python2.7
 WARNINGS := -Wall -Wno-sign-compare
 
@@ -318,6 +318,7 @@ ifeq ($(BLAS), mkl)
 else ifeq ($(BLAS), open)
 	# OpenBLAS
 	LIBRARIES += openblas
+    BLAS_LIB ?= /opt/OpenBLAS/lib
 else
 	# ATLAS
 	ifeq ($(LINUX), 1)
@@ -343,6 +344,27 @@ INCLUDE_DIRS += $(BLAS_INCLUDE)
 LIBRARY_DIRS += $(BLAS_LIB)
 
 LIBRARY_DIRS += $(LIB_BUILD_DIR)
+
+FFT ?= 0
+ifeq ($(FFT), 1)
+        ifneq ($(BLAS), mkl)
+                LIBRARIES += fftw3f fftw3
+        endif
+        COMMON_FLAGS += -DUSE_FFT
+endif
+
+# OpenMP
+OPENMP ?= 0
+ifeq ($(OPENMP), 1)
+        CXXFLAGS += -fopenmp
+        LINKFLAGS += -fopenmp
+        ifeq ($(BLAS), mkl)
+                LIBRARIES += iomp5
+                LIBRARY_DIRS += $(INTEL_OMP_DIR)/compiler/lib/intel64
+        else
+                LIBRARIES += fftw3_omp fftw3f_omp
+        endif
+endif
 
 # Automatic dependency generation (nvcc is handled separately)
 CXXFLAGS += -MMD -MP
@@ -390,7 +412,7 @@ endif
 	py mat py$(PROJECT) mat$(PROJECT) proto runtest \
 	superclean supercleanlist supercleanfiles warn everything
 
-all: $(STATIC_NAME) $(DYNAMIC_NAME) tools examples
+all: $(STATIC_NAME) $(DYNAMIC_NAME) examples tools
 
 everything: $(EVERYTHING_TARGETS)
 

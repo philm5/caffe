@@ -20,18 +20,18 @@ template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
 
-  // set all weights to 1.0 for testing purposes
-  int weight_size = this->height_ * this->width_;
-  // Allocations & plan for weights
-  int num_weights = this->num_output_ * (this->channels_ / this->group_);
-  int weight_alloc_size_in = weight_size * num_weights;
-  Dtype* weight = reinterpret_cast<Dtype *>(malloc(weight_alloc_size_in * sizeof(Dtype)));
-  for (int j = 0; j < weight_alloc_size_in; ++j)
-  {
-    weight[j] = 1.0;
-  }
+//  // set all weights to 1.0 for testing purposes
+//  int weight_size = this->height_ * this->width_;
+//  // Allocations & plan for weights
+//  int num_weights = this->num_output_ * (this->channels_ / this->group_);
+//  int weight_alloc_size_in = weight_size * num_weights;
+//  Dtype* weight = reinterpret_cast<Dtype *>(malloc(weight_alloc_size_in * sizeof(Dtype)));
+//  for (int j = 0; j < weight_alloc_size_in; ++j)
+//  {
+//    weight[j] = 1.0;
+//  }
 
-  //const Dtype* weight = this->blobs_[0]->cpu_data();
+  const Dtype* weight = this->blobs_[0]->cpu_data();
 
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->cpu_data();
@@ -40,15 +40,14 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       this->forward_cpu_gemm(bottom_data + bottom[i]->offset(n), weight,
           top_data + top[i]->offset(n));
 
-      auto data = top_data + top[i]->offset(n);
-      //if (this->bias_term_) {
-      //  const Dtype* bias = this->blobs_[1]->cpu_data();
-      //  this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
-      //}
+      if (this->bias_term_) {
+        const Dtype* bias = this->blobs_[1]->cpu_data();
+        this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
+      }
     }
   }
 
-  this->write_simple_arr_to_disk("top_data_non_fft.txt", this->num_output_ * this->height_out_ * this->width_out_, top[0]->mutable_cpu_data());
+  // this->write_simple_arr_to_disk("top_data_non_fft.txt", this->num_output_ * this->height_out_ * this->width_out_, top[0]->mutable_cpu_data());
 }
 
     template <typename Dtype>

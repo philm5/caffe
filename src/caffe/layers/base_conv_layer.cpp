@@ -294,5 +294,4 @@ void BaseConvolutionLayer<Dtype>::backward_gpu_bias(Dtype* bias,
 #endif  // !CPU_ONLY
 
 INSTANTIATE_CLASS(BaseConvolutionLayer);
-
 }  // namespace caffe

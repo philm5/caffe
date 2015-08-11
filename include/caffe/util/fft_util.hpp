@@ -15,6 +15,9 @@ namespace caffe
 {
     template<typename Dtype> 
     void *fft_cpu_malloc(int n);
+
+    template <typename Dtype>
+    void fft_cpu_free(void *ptr);
     
     template<typename Dtype>
     void *fft_plan_dft_r2c_2d(int n0, int n1, Dtype *in, std::complex<Dtype> *out, unsigned flags);

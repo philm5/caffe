@@ -182,8 +182,10 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 public:
-    explicit ConvolutionLayerFFT(const LayerParameter& param) : ConvolutionLayer<Dtype>(param) {}
-    
+    explicit ConvolutionLayerFFT(const LayerParameter& param) : ConvolutionLayer<Dtype>(param), weights_converted_(false) {}
+
+    virtual ~ConvolutionLayerFFT();
+
     virtual inline const char* type() const { return "Convolution"; }    
 
     virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
@@ -242,7 +244,7 @@ protected:
     void *fft_weight_plan_;
     void *fft_input_plan_;
     void *ifft_plan_;
-    bool weights_converted = false;
+    bool weights_converted_;
 
     Dtype *fft_input_real_;
     std::complex<Dtype> *fft_input_complex_;
@@ -252,6 +254,10 @@ protected:
     Dtype *fft_conv_result_real_;
 
     void write_simple_arr_to_disk(const char *output_name, int size, Dtype *arr);
+
+    size_t weight_alloc_size_in;
+    size_t weight_alloc_size_out;
+    int num_of_threads_;
 };
 
 /**

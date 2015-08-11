@@ -36,12 +36,12 @@ namespace caffe
                                           of the first array and the
                                           first element of the second array */
         int istride = 1; /* array is contiguous in memory */
-        int *inembed = nullptr;
+        int *inembed = NULL;
 
         // out
         int odist = n0 * (n1 / 2 + 1);
         int ostride = 1;
-        int *onembed = nullptr;
+        int *onembed = NULL;
 
         return reinterpret_cast<void *>(fftwf_plan_many_dft_r2c(rank, n, how_many, in, inembed, istride, idist,
                                                                 reinterpret_cast<fftwf_complex *>(out), onembed, ostride,
@@ -52,7 +52,7 @@ namespace caffe
     void *fft_plan_many_dft_r2c_2d<double>(int n0, int n1, int how_many, double *in, std::complex<double> *out, unsigned flags)
     {
         // TODO: implement double version!!
-        return nullptr;
+        return NULL;
     }
 
     template<>
@@ -65,12 +65,12 @@ namespace caffe
                                           of the first array and the
                                           first element of the second array */
         int istride = 1; /* array is contiguous in memory */
-        int *inembed = nullptr;
+        int *inembed = NULL;
 
         // out
         int odist = n0 * n1;
         int ostride = 1;
-        int *onembed = nullptr;
+        int *onembed = NULL;
 
 
         // return reinterpret_cast<void *>(fftwf_plan_dft_c2r_2d(n0, n1, reinterpret_cast<fftwf_complex *>(in), out, flags));
@@ -83,7 +83,7 @@ namespace caffe
     void *fft_plan_many_dft_c2r_2d<double>(int n0, int n1, int how_many, std::complex<double> *in, double *out, unsigned flags)
     {
         // TODO: implement double version!!
-        return nullptr;
+        return NULL;
     }
 
     
@@ -120,5 +120,17 @@ namespace caffe
         n++;
 
         return n;
+    }
+
+    template <>
+    void fft_cpu_free<float>(void *ptr)
+    {
+        fftwf_free(ptr);
+    }
+
+    template <>
+    void fft_cpu_free<double>(void *ptr)
+    {
+        fftw_free(ptr);
     }
 }
