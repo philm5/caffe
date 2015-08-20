@@ -122,8 +122,7 @@ namespace caffe
             // ---------------------------------------------------
             // The plan to compute the input values to complex
             int num_weights = this->num_output_ * (this->channels_ / this->group_);
-            int K = (this->channels_ / this->group_); // the size of channels, second dim...
-            fft_input_plan_ = fft_plan_many_dft_r2c_2d<Dtype>(fft_height_, fft_width_, K, fft_input_real_, fft_input_complex_, FFTW_ESTIMATE);
+            fft_input_plan_ = fft_plan_many_dft_r2c_2d<Dtype>(fft_height_, fft_width_, this->channels_, fft_input_real_, fft_input_complex_, FFTW_ESTIMATE);
 
             this->convert_weights_fft();
             this->convert_bottom(bottom);
