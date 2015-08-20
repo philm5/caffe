@@ -44,8 +44,12 @@ namespace caffe
         void ConvolutionLayerFFT<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top)
         {            
             ConvolutionLayer<Dtype>::Reshape(bottom, top);
-            LOG(ERROR) << "called base\nConvolutionLayerFFT::Reshape"; 
-            this->fft_set_up();
+            LOG(ERROR) << "called base\nConvolutionLayerFFT::Reshape";
+
+            if (!this->weights_converted_)
+            {
+                this->fft_set_up();
+            }
         }    
         
         template <typename Dtype>
