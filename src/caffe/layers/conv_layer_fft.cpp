@@ -312,40 +312,43 @@ namespace caffe
             // k0k1k2|k0k1k2|k0k1k2|k0k1k2|k0k1k2
 
             // loop through channels.
-            int N = this->num_output_;
-            int K = (this->channels_ / this->group_);
+            int N = this->num_output_ / this->group_;
+            int K = this->channels_; //(this->channels_ / this->group_);
             int H = this->fft_height_;
-            int W = this->fft_width_;
+            int W = (this->fft_width_ / 2) + 1;
 
             int k, n, h, w;
-            #pragma omp parallel for collapse(4) private(k, n, h, w)
-            for (k = 0; k < K; ++k)
+           //  #pragma omp parallel for collapse(4) private(k, n, h, w)
+            for (n = 0; n < N; ++n)
             {
-                // loop through weights
-                for (n = 0; n < N; ++n)
+                for (k = 0; k < K; ++k)
                 {
                     for (h = 0; h < H; h++)
                     {
-                        for (w = 0; w < (W / 2) + 1; w++)
+                        for (w = 0; w < W; w++)
                         {
-                            // todo: check if h * ((W / 2) + 1) is correct vs. old commit
-                            int offset = + h * ((W / 2) + 1);
-                            std::complex<Dtype> *ptr_input = fft_input_complex_ + (k * this->fft_complex_size_) + offset + w;
+                            const int ch_gr = this->channels_ / this->group_;
+                            // the channel group. e.g. g = [0;...;group_-1]
+                            int g = k / ch_gr;
+                            // the idx within the channel. e.g. k_idx = [0;...;ch_gr-1]
+                            int k_idx = k % ch_gr;
 
-                            int fft_size_offset = (n * K + k) * this->fft_complex_size_;
-                            std::complex<Dtype> *ptr_weight = this->fft_weights_out_complex_ + fft_size_offset + offset + w;
-                            std::complex<Dtype> *ptr_res = this->fft_conv_result_complex_ + fft_size_offset + offset + w;
+                            // The actual idx of n. Because N = n_o_ / gr_ (see above) the idx of n is actual n + ...
+                            int n_idx = n + g * N;
 
+                            // Indexing: ((n * K + k) * H + h) * W + w
+                            std::complex<Dtype> input = fft_input_complex_[((0 * K + k) * H + h) * W + w];
+                            std::complex<Dtype> weight = fft_weights_out_complex_[((n_idx * ch_gr + k_idx) * H + h) * W + w];
 
                             // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
                             // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
-                            Dtype a = ptr_input->real();
-                            Dtype b = ptr_input->imag();
-                            Dtype c = ptr_weight->real();
-                            Dtype d = ptr_weight->imag();
+                            Dtype a = std::real(weight);
+                            Dtype b = std::imag(weight);
+                            Dtype c = std::real(input);
+                            Dtype d = std::imag(input);
 
                             std::complex<Dtype> res(a * c - b * d, b * c + a * d);
-                            *ptr_res = res;
+                            this->fft_conv_result_complex_[((n_idx * ch_gr + k_idx) * H + h) * W + w] = res;
                         }
                     }
                 }
