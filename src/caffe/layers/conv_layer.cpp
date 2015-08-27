@@ -30,6 +30,8 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 //  {
 //    weight[j] = 1.0;
 //  }
+//
+//  weight[0] = 2.0;
 
   const Dtype* weight = this->blobs_[0]->cpu_data();
 
@@ -47,11 +49,19 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     }
   }
 
+#define WRITE_TOP_RES
+#ifdef WRITE_TOP_RES
+  std::stringstream ss;
+  ss << "res_top_nor_" << this->layer_param_.name() << ".txt";
+  const char *s = ss.str().c_str();
+  this->write_simple_arr_to_disk(s, top[0]->count() , top[0]->cpu_data());
+#endif
+
   // this->write_simple_arr_to_disk("top_data_non_fft.txt", this->num_output_ * this->height_out_ * this->width_out_, top[0]->mutable_cpu_data());
 }
 
     template <typename Dtype>
-    void ConvolutionLayer<Dtype>::write_simple_arr_to_disk(const char* output_name, int size, Dtype *arr)
+    void ConvolutionLayer<Dtype>::write_simple_arr_to_disk(const char* output_name, int size, const Dtype *arr)
     {
       std::ofstream fout(output_name); //opening an output stream for file test.txt
       if(fout.is_open())

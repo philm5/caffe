@@ -176,7 +176,7 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual inline bool reverse_dimensions() { return false; }
   virtual void compute_output_shape();
 
-    void write_simple_arr_to_disk(const char *output_name, int size, Dtype *arr);
+    void write_simple_arr_to_disk(const char *output_name, int size, const Dtype *arr);
 };
 
 template <typename Dtype>
@@ -224,7 +224,7 @@ protected:
     /**
      * @brief Transforms blob data to the padded real data array for use in fft.
      */
-    virtual void transform_blob_to_real_array(int N, int K, int H, int W, const Dtype *blob_data, Dtype *padded_real_data);
+    virtual void transform_blob_to_real_array(int N, int K, int H, int W, const Dtype *blob_data, Dtype *padded_real_data, bool flip = false);
 
     /**
      * @brief Converts the input values to complex.
@@ -253,7 +253,7 @@ protected:
     std::complex<Dtype> *fft_conv_result_complex_;
     Dtype *fft_conv_result_real_;
 
-    void write_simple_arr_to_disk(const char *output_name, int size, Dtype *arr);
+    void write_simple_arr_to_disk(const char *output_name, int size, const Dtype *arr);
 
     size_t weight_alloc_size_in;
     size_t weight_alloc_size_out;

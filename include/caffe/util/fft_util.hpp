@@ -14,7 +14,7 @@
 namespace caffe
 {
     template<typename Dtype> 
-    void *fft_cpu_malloc(int n);
+    void *fft_cpu_malloc(size_t n);
 
     template <typename Dtype>
     void fft_cpu_free(void *ptr);

@@ -3,13 +3,13 @@
 namespace caffe 
 {
     template<> 
-    void *fft_cpu_malloc<float>(int n)
+    void *fft_cpu_malloc<float>(size_t n)
     {
         return reinterpret_cast<void *>(fftwf_malloc(n));
     }
 
     template<> 
-    void *fft_cpu_malloc<double>(int n)
+    void *fft_cpu_malloc<double>(size_t n)
     {
         return reinterpret_cast<void *>(fftw_malloc(n));
     }
@@ -126,11 +126,13 @@ namespace caffe
     void fft_cpu_free<float>(void *ptr)
     {
         fftwf_free(ptr);
+        ptr = NULL;
     }
 
     template <>
     void fft_cpu_free<double>(void *ptr)
     {
         fftw_free(ptr);
+        ptr = NULL;
     }
 }
