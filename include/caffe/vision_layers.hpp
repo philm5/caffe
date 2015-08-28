@@ -224,7 +224,15 @@ protected:
     /**
      * @brief Transforms blob data to the padded real data array for use in fft.
      */
-    virtual void transform_blob_to_real_array(int N, int K, int H, int W, const Dtype *blob_data, Dtype *padded_real_data, bool flip = false);
+    virtual void transform_blob_to_real_array(int N,
+                                              int K,
+                                              int H,
+                                              int W,
+                                              const Dtype *blob_data,
+                                              Dtype *padded_real_data,
+                                              int pad_h = 0,
+                                              int pad_w = 0,
+                                              bool flip = false);
 
     /**
      * @brief Converts the input values to complex.

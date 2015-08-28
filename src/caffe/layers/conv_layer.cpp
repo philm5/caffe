@@ -19,7 +19,6 @@ void ConvolutionLayer<Dtype>::compute_output_shape() {
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-
 //  // set all weights to 1.0 for testing purposes
 //  int weight_size = this->height_ * this->width_;
 //  // Allocations & plan for weights
