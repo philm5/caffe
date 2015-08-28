@@ -19,18 +19,6 @@ void ConvolutionLayer<Dtype>::compute_output_shape() {
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-//  // set all weights to 1.0 for testing purposes
-//  int weight_size = this->height_ * this->width_;
-//  // Allocations & plan for weights
-//  int num_weights = this->num_output_ * (this->channels_ / this->group_);
-//  int weight_alloc_size_in = weight_size * num_weights;
-//  Dtype* weight = reinterpret_cast<Dtype *>(malloc(weight_alloc_size_in * sizeof(Dtype)));
-//  for (int j = 0; j < weight_alloc_size_in; ++j)
-//  {
-//    weight[j] = 1.0;
-//  }
-//
-//  weight[0] = 2.0;
 
   const Dtype* weight = this->blobs_[0]->cpu_data();
 
@@ -48,7 +36,7 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     }
   }
 
-#define WRITE_TOP_RES
+//#define WRITE_TOP_RES
 #ifdef WRITE_TOP_RES
   std::stringstream ss;
   ss << "res_top_nor_" << this->layer_param_.name() << ".txt";
