@@ -82,14 +82,14 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
     this->fft_width_ = next_power_of_2(w_to_check);
   }
   else {
-    this->fft_width_ = this->width_;
+    this->fft_width_ = w_to_check;
   }
 
   if (!check_power_of_2(h_to_check)) {
     this->fft_height_ = next_power_of_2(h_to_check);
   }
   else {
-    this->fft_height_ = this->height_;
+    this->fft_height_ = h_to_check;
   }
 
   // for sizes see: http://www.fftw.org/doc/Multi_002dDimensional-DFTs-of-Real-Data.html
@@ -178,13 +178,14 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
   // Destroy input plan...
   fft_destroy_plan<Dtype>(this->fft_input_plan_);
 
+  size_t conv_result_complex_size = this->fft_complex_size_ * this->num_output_ * sizeof(std::complex<Dtype>);
 
   // alloc data for result
   this->fft_conv_result_complex_ =
-      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->weight_alloc_size_out));
+      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(conv_result_complex_size));
 
   // set complex mem to 0
-  caffe_memset(this->weight_alloc_size_out, 0., this->fft_conv_result_complex_);
+  caffe_memset(conv_result_complex_size, 0., this->fft_conv_result_complex_);
 
   double begin_clock = cpu_time();
   this->convolve_fft();
@@ -197,18 +198,18 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
   // free the memory used only once per forward call (the input memory was already used in convolve_fft)
   fft_cpu_free<Dtype>(this->fft_input_complex_);
 
+  size_t conv_result_real_size = this->fft_real_size_ * this->num_output_ * sizeof(Dtype);
+
   // alloc data for real result
-  this->fft_conv_result_real_ = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->weight_alloc_size_in));
+  this->fft_conv_result_real_ = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(conv_result_real_size));
 
   // set real mem to 0
-  caffe_memset(this->weight_alloc_size_in, 0., this->fft_conv_result_real_);
-
-  int num_weights = this->num_output_ * (this->channels_ / this->group_);
+  caffe_memset(conv_result_real_size, 0., this->fft_conv_result_real_);
 
   // The ifft plan; the backward conversion from c2r
   this->ifft_plan_ = fft_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
                                                      this->fft_width_,
-                                                     num_weights,
+                                                     this->num_output_,
                                                      this->fft_conv_result_complex_,
                                                      this->fft_conv_result_real_,
                                                      FFTW_ESTIMATE);
@@ -438,8 +439,9 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
           Dtype c = std::real(input);
           Dtype d = std::imag(input);
 
+          const int res_idx = (n * H + h) * W + w; // before with channels: ((n * K + k) * H + h) * W + w;
           std::complex<Dtype> res(a * c - b * d, b * c + a * d);
-          res_complex[weight_idx] = res;
+          res_complex[res_idx] += res;
         }
       }
     }
@@ -457,8 +459,8 @@ void ConvolutionLayerFFT<Dtype>::normalize_ifft_result(Blob<Dtype> *top) {
 
   #pragma omp parallel for
   for (int n = 0; n < N; ++n) {
-    for (int k = 0; k < K; ++k) {
-      int offset_res_real = (n * K + k) * this->fft_real_size_;
+    //for (int k = 0; k < K; ++k) {
+      int offset_res_real = n * this->fft_real_size_; // before with channels: (n * K + k) * this->fft_real_size_;
 
       for (int h = 0; h < this->height_out_; ++h) // =55 in 1st layer
       {
@@ -478,10 +480,10 @@ void ConvolutionLayerFFT<Dtype>::normalize_ifft_result(Blob<Dtype> *top) {
           int res_data_idx = offset_res_real + h_idx * this->fft_width_ + w_idx;
 
           // normalize fft and sum up everything from the input channels...
-          top_data[top_data_idx] += this->fft_conv_result_real_[res_data_idx] * ifft_normalize_factor;
+          top_data[top_data_idx] = this->fft_conv_result_real_[res_data_idx] * ifft_normalize_factor;
         }
       }
-    }
+   // }
   }
 }
 
