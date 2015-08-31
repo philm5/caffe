@@ -13,6 +13,8 @@
 
 namespace caffe
 {
+    double cpu_time(void);
+
     template<typename Dtype> 
     void *fft_cpu_malloc(size_t n);
 
@@ -30,6 +32,9 @@ namespace caffe
     
     template<typename Dtype>
     void fft_execute_plan(const void *plan_handle);
+
+    template<typename Dtype>
+    void fft_destroy_plan(const void *plan_handle);
 
     bool check_power_of_2(unsigned int n);
 

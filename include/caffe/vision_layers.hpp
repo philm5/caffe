@@ -205,6 +205,16 @@ protected:
     virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
 
+    /**
+     * @brief begins the forward propagation with fft!
+     */
+    virtual void Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
+                                 const vector<Blob<Dtype>*>& top);
+
+    /**
+     * @brief The fft task for a single input.
+     */
+    void Forward_cpu_fft_single(const Blob<Dtype> *bottom, Blob<Dtype> *top);
 
     /**
      * @brief Converts the weights via the fft. This is just done the first time. (Because the weights stay the same)
@@ -219,7 +229,7 @@ protected:
     /**
      * @brief Normalizes the ifft result and writes it to the top layer.
      */
-    virtual void normalize_ifft_result(const vector<Blob<Dtype>*>& top);
+    virtual void normalize_ifft_result(Blob<Dtype> *top);
 
     /**
      * @brief Transforms blob data to the padded real data array for use in fft.
@@ -237,7 +247,7 @@ protected:
     /**
      * @brief Converts the input values to complex.
      */
-    virtual void convert_bottom(const vector<Blob<Dtype>*>& bottom);
+    virtual void convert_bottom(const Blob<Dtype> *bottom);
 
     virtual void write_arr_to_disk(const char* output_name, int size, void *arr, bool is_complex = false);
 

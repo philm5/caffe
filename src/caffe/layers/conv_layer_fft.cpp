@@ -10,35 +10,43 @@
 
 #ifdef _OPENMP
 #include <omp.h>
+#include <sys/time.h>
 #endif
-
 // #define WRITE_ARRAYS_T0_DISK
+
+// #define WRITE_DEBUG
 
 namespace caffe {
 template<typename Dtype>
 ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "called ~ConvolutionLayerFFT()... ";
+#endif
 
   fft_cpu_free<Dtype>(fft_weights_out_complex_);
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "weights complex CHANGE: FREE";
-
-  // TODO: delete all plans? all memory?
-
   LOG(ERROR) << "complex weights freed.";
+#endif
 }
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype> *> &bottom,
                                             const vector<Blob<Dtype> *> &top) {
   ConvolutionLayer<Dtype>::LayerSetUp(bottom, top);
+
+ #ifdef WRITE_DEBUG
   LOG(ERROR) << "called base\nConvolutionLayerFFT::LayerSetUp";
+#endif
 
 }
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Reshape(const vector<Blob<Dtype> *> &bottom, const vector<Blob<Dtype> *> &top) {
   ConvolutionLayer<Dtype>::Reshape(bottom, top);
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "called base\nConvolutionLayerFFT::Reshape";
+#endif
 
   if (!this->weights_converted_) {
     this->fft_set_up();
@@ -50,7 +58,9 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
   // here only the memory should be reserved... The weight data will
   // either be trained or loaded from disk. So there is no data available
   // yet...
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "ConvolutionLayerFFT::fft_set_up";
+#endif
 
   // ---- openmp ------------------------------------------
   num_of_threads_ = 1;
@@ -94,7 +104,10 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
 
   this->weight_alloc_size_out = this->fft_complex_size_ * num_weights * sizeof(std::complex<Dtype>);
   this->fft_weights_out_complex_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->weight_alloc_size_out));
+
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "weights complex CHANGE: cpu_malloc";
+#endif
 
   // The plan. Is a plan for the actual conversion. Conversion will be done when weights are rdy...
   this->fft_weight_plan_ = fft_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
@@ -107,14 +120,45 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom, const vector<Blob<Dtype> *> &top) {
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "ConvolutionLayerFFT::Forward_cpu";
+  LOG(ERROR) << "bottom size: " << bottom.size();
+#endif
 
   if (!this->weights_converted_) {
     // if weights were converted alrdy don't do that again :)
     this->convert_weights_fft();
   }
+#ifdef WRITE_DEBUG
+  double begin_clock = cpu_time();
+#endif
+  this->Forward_cpu_fft(bottom, top);
+#ifdef WRITE_DEBUG
+  double end_clock = cpu_time();
+  LOG(ERROR) << "!!! FORWARD took " << 1000.0 * (end_clock - begin_clock) << " ms.";
+#endif
+}
 
-  // Allocations & plan for input values (bottom values)
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype> *> &bottom, const vector<Blob<Dtype> *> &top) {
+  for (int i = 0; i < bottom.size(); ++i) {
+    this->Forward_cpu_fft_single(bottom[i], top[i]);
+
+    // bias
+    Dtype *top_data = top[i]->mutable_cpu_data();
+    for (int n = 0; n < this->num_; ++n) {
+      if (this->bias_term_) {
+        const Dtype *bias = this->blobs_[1]->cpu_data();
+        this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
+      }
+    }
+  }
+}
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *bottom, Blob<Dtype> *top) {
+// Allocations & plan for input values (bottom values)
   size_t alloc_size_input_real = this->fft_real_size_ * 1 * this->channels_ * sizeof(Dtype);
   size_t alloc_size_input_complex = this->fft_complex_size_ * 1 * this->channels_ * sizeof(std::complex<Dtype>);
   this->fft_input_real_ = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(alloc_size_input_real));
@@ -131,6 +175,10 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom
   // Convert input and fft it...
   this->convert_bottom(bottom);
 
+  // Destroy input plan...
+  fft_destroy_plan<Dtype>(this->fft_input_plan_);
+
+
   // alloc data for result
   this->fft_conv_result_complex_ =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->weight_alloc_size_out));
@@ -138,10 +186,13 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom
   // set complex mem to 0
   caffe_memset(this->weight_alloc_size_out, 0., this->fft_conv_result_complex_);
 
-  clock_t begin_clock = std::clock();
+  double begin_clock = cpu_time();
   this->convolve_fft();
-  clock_t end_clock = std::clock();
-  LOG(ERROR) << "fft convolve took " << 1000.0 * (end_clock - begin_clock) / CLOCKS_PER_SEC << " ms.";
+  double end_clock = cpu_time();
+
+#ifdef WRITE_DEBUG
+  LOG(ERROR) << "fft convolve took " << 1000.0 * (end_clock - begin_clock) << " ms.";
+#endif
 
   // free the memory used only once per forward call (the input memory was already used in convolve_fft)
   fft_cpu_free<Dtype>(this->fft_input_complex_);
@@ -156,21 +207,26 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom
 
   // The ifft plan; the backward conversion from c2r
   this->ifft_plan_ = fft_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
-                                               this->fft_width_,
+                                                     this->fft_width_,
                                                      num_weights,
-                                               this->fft_conv_result_complex_,
-                                               this->fft_conv_result_real_,
-                                               FFTW_ESTIMATE);
+                                                     this->fft_conv_result_complex_,
+                                                     this->fft_conv_result_real_,
+                                                     FFTW_ESTIMATE);
 
-  begin_clock = std::clock();
+  begin_clock = cpu_time();
   // execute the actual ifft
   fft_execute_plan<Dtype>(this->ifft_plan_);
-  end_clock = std::clock();
+
+  // Destroy input plan...
+  fft_destroy_plan<Dtype>(this->ifft_plan_);
+  end_clock = cpu_time();
 
   // free the complex result, because it was already ifft-ed to real.
   fft_cpu_free<Dtype>(this->fft_conv_result_complex_);
 
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "ifft took " << 1000.0 * (end_clock - begin_clock) / CLOCKS_PER_SEC << " ms.";
+#endif
 
   this->normalize_ifft_result(top);
 
@@ -178,16 +234,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom
 #ifndef WRITE_ARRAYS_T0_DISK
   fft_cpu_free<Dtype>(this->fft_conv_result_real_);
 #endif
-  //  bias
-  for (int i = 0; i < bottom.size(); ++i) {
-    Dtype *top_data = top[i]->mutable_cpu_data();
-    for (int n = 0; n < this->num_; ++n) {
-      if (this->bias_term_) {
-        const Dtype *bias = this->blobs_[1]->cpu_data();
-        this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
-      }
-    }
-  }
+
 
 //#define WRITE_TOP_RES
 #ifdef WRITE_TOP_RES
@@ -197,7 +244,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom
   this->write_simple_arr_to_disk(s, top[0]->count() , top[0]->cpu_data());
 #endif
 
-  
+
 
 #ifdef WRITE_ARRAYS_T0_DISK
   int N = this->num_output_;
@@ -208,27 +255,33 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom
 }
 
 template<typename Dtype>
-void ConvolutionLayerFFT<Dtype>::convert_bottom(const vector<Blob<Dtype> *> &bottom) {
-  const Dtype *input_data_blob = bottom[0]->cpu_data();
-  vector<int> shape = bottom[0]->shape();
-
+void ConvolutionLayerFFT<Dtype>::convert_bottom(const Blob<Dtype> *bottom) {
+  const Dtype *input_data_blob = bottom->cpu_data();
+  vector<int> shape = bottom->shape();
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "start of conversion of bottom data...";
+#endif
   // bottom data has to be shifted with the padding param to ensure the correct calculation; but not the weights
   this->transform_blob_to_real_array(shape[0], shape[1], shape[2], shape[3], input_data_blob, this->fft_input_real_, this->pad_h_, this->pad_w_);
 
   caffe_memset(this->fft_complex_size_ * shape[0] * shape[1] * sizeof(std::complex<Dtype>),
                0.,
                this->fft_input_complex_);
-
-  clock_t begin_clock = std::clock();
+#ifdef WRITE_DEBUG
+  clock_t begin_clock = cpu_time();
+#endif
   fft_execute_plan<Dtype>(this->fft_input_plan_);
-  clock_t end_clock = std::clock();
+#ifdef WRITE_DEBUG
+  clock_t end_clock = cpu_time();
+#endif
 
 #ifndef WRITE_ARRAYS_T0_DISK
   fft_cpu_free<Dtype>(this->fft_input_real_);
 #endif
 
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "fft for bottom data took " << 1000.0 * (end_clock - begin_clock) / CLOCKS_PER_SEC << " ms.";
+#endif
 
 #ifdef WRITE_ARRAYS_T0_DISK
   this->write_arr_to_disk("input_real_in.txt", shape[0] * shape[1], this->fft_input_real_);
@@ -252,7 +305,7 @@ void ConvolutionLayerFFT<Dtype>::transform_blob_to_real_array(int N,
   // set everything to 0 before --> so not set weights are 0-padded :)
   caffe_memset(this->fft_real_size_ * num_arr * sizeof(Dtype), 0., padded_real_data);
 
-  //#pragma omp parallel for collapse(4)
+  #pragma omp parallel for
   for (int n = 0; n < N; n++) {
     for (int k = 0; k < K; k++) {
       for (int h = 0; h < H; h++) {
@@ -305,18 +358,26 @@ void ConvolutionLayerFFT<Dtype>::convert_weights_fft() {
   // set complex mem to 0
   caffe_memset(this->fft_complex_size_ * N * K * sizeof(std::complex<Dtype>), 0.,
                this->fft_weights_out_complex_);
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "weights complex CHANGE: memset 0";
 
-  clock_t begin_clock = std::clock();
+  clock_t begin_clock = cpu_time();
+#endif
   fft_execute_plan<Dtype>(this->fft_weight_plan_);
+
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "weights complex CHANGE: fft_weight_plan_";
-  clock_t end_clock = std::clock();
+  clock_t end_clock = cpu_time();
+#endif
 
 #ifndef WRITE_ARRAYS_T0_DISK
   fft_cpu_free<Dtype>(fft_weights_in_real_);
 #endif
 
+#ifdef WRITE_DEBUG
   LOG(ERROR) << "fft for one layer took " << 1000.0 * (end_clock - begin_clock) / CLOCKS_PER_SEC << " ms.";
+#endif
+
   this->weights_converted_ = true;
 
 #ifdef WRITE_ARRAYS_T0_DISK
@@ -328,33 +389,47 @@ void ConvolutionLayerFFT<Dtype>::convert_weights_fft() {
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::convolve_fft() {
-  int N = this->num_output_;              //              256
-  int K = this->channels_ / this->group_; // 96 / 2     = 48
-  int H = this->fft_height_;              //              32 ?
-  int W = (this->fft_width_ / 2) + 1;     // 32 / 2 + 1 = 17
+  const int N = this->num_output_;              //              256
+  const int K = this->channels_ / this->group_; // 96 / 2     = 48
+  const int H = this->fft_height_;              //              32 ?
+  const int W = (this->fft_width_ / 2) + 1;     // 32 / 2 + 1 = 17
 
-  for (int n = 0; n < N; ++n) {
-    for (int k = 0; k < K; ++k) {
-      /* here every filter response is being calculated. there are num_output_ * (channels_ / group_) filters...
+  const int weight_group_size = N / this->group_;
+
+  int n = 0;
+  int k = 0;
+  int h = 0;
+  int w = 0;
+
+  std::complex<Dtype> *in_complex = this->fft_input_complex_;
+  std::complex<Dtype> *weight_complex = this->fft_weights_out_complex_;
+  std::complex<Dtype> *res_complex = this->fft_conv_result_complex_;
+
+
+  #pragma omp parallel for \
+          private(n, k, h, w) shared(res_complex, in_complex, weight_complex)
+  for (n = 0; n < N; ++n) {
+    // check which group_ idx we are in
+    const int group_idx = n / weight_group_size;
+    for (k = 0; k < K; ++k) {
+      // get the input_k. this is the k we use to index the input k-dimension. the max input_k is group_ times more
+      // than the max k of the weight.
+      const int input_k = k + group_idx * K;
+
+      /* in the following loops every filter response is being calculated. there are num_output_ * (channels_ / group_) filters...
        * each (1/group_) part is multiplied with each part of the input. e.g. for group_ = 2, n_o_ 256 and c_ = 96:
        * weights dim: 256x48x5x5, input dim: 1x96x27x27 --> splitted into [1x48x27x27, 1x48x27x27]
        * first 128 weights [128x48x5x5] will be convolved with first part of weights (dimension match!) --> 128 responses
        * same for 2nd part --> 2x128 responses to forward to the next channel
        */
-      for (int h = 0; h < H; ++h) {
-        for (int w = 0; w < W; ++w) {
-          // check which group_ idx we are in
-          int group_idx = n / (N / this->group_);
-          // get the idx of the weight
+      for (h = 0; h < H; ++h) {
+        for (w = 0; w < W; ++w) {
           // Indexing: ((n * K + k) * H + h) * W + w
+          const int input_idx = (input_k * H + h) * W + w;
+          const std::complex<Dtype> input = in_complex[input_idx];
 
-          // input dim: 1x96x27x27
-          int input_k = k + group_idx * K;
-          int input_idx = ((0 * this->channels_ + input_k) * H + h) * W + w;
-          const std::complex<Dtype> input = this->fft_input_complex_[input_idx];
-
-          int weight_idx = ((n * K + k) * H + h) * W + w;
-          const std::complex<Dtype> weight = this->fft_weights_out_complex_[weight_idx];
+          const int weight_idx = ((n * K + k) * H + h) * W + w;
+          const std::complex<Dtype> weight = weight_complex[weight_idx];
 
           // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
           // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
@@ -364,7 +439,7 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
           Dtype d = std::imag(input);
 
           std::complex<Dtype> res(a * c - b * d, b * c + a * d);
-          this->fft_conv_result_complex_[weight_idx] = res;
+          res_complex[weight_idx] = res;
         }
       }
     }
@@ -372,14 +447,15 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
 }
 
 template<typename Dtype>
-void ConvolutionLayerFFT<Dtype>::normalize_ifft_result(const vector<Blob<Dtype> *> &top) {
-  Dtype *top_data = top[0]->mutable_cpu_data();
+void ConvolutionLayerFFT<Dtype>::normalize_ifft_result(Blob<Dtype> *top) {
+  Dtype *top_data = top->mutable_cpu_data();
 
   Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
 
-  // TODO: do the following right... :)
   int N = this->num_output_;
   int K = (this->channels_ / this->group_);
+
+  #pragma omp parallel for
   for (int n = 0; n < N; ++n) {
     for (int k = 0; k < K; ++k) {
       int offset_res_real = (n * K + k) * this->fft_real_size_;
