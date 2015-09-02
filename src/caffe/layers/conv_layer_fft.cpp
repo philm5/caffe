@@ -15,7 +15,7 @@
 // #define WRITE_ARRAYS_T0_DISK
 
 // #define WRITE_DEBUG
-#define WRITE_DEBUG_FW
+// #define WRITE_DEBUG_FW
 
 namespace caffe {
 template<typename Dtype>
@@ -72,6 +72,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
     num_of_threads_ = 1;
   }
   fft_init_threads<Dtype>();
+  fft_plan_with_nthreads<Dtype>(this->num_of_threads_);
 #endif
 
   // set fft width and height to be the image width and height (for now without padding...)
@@ -112,7 +113,6 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
 #endif
 
   // The plan. Is a plan for the actual conversion. Conversion will be done when weights are rdy...
-  fft_plan_with_nthreads<Dtype>(this->num_of_threads_);
   this->fft_weight_plan_ = fft_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
                                                      this->fft_width_,
                                                      num_weights,
@@ -171,7 +171,6 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
 
   // ---------------------------------------------------
   // The plan to compute the input values to complex
-  fft_plan_with_nthreads<Dtype>(this->num_of_threads_);
   this->fft_input_plan_ = fft_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
                                                           this->fft_width_,
                                                           this->channels_,
@@ -218,7 +217,6 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
   caffe_memset(conv_result_real_size, 0., this->fft_conv_result_real_);
 
   // The ifft plan; the backward conversion from c2r
-  fft_plan_with_nthreads<Dtype>(this->num_of_threads_);
   this->ifft_plan_ = fft_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
                                                      this->fft_width_,
                                                      this->num_output_,
@@ -290,7 +288,6 @@ void ConvolutionLayerFFT<Dtype>::convert_bottom(const Blob<Dtype> *bottom) {
 #endif
   fft_execute_plan<Dtype>(this->fft_input_plan_);
 #ifdef WRITE_DEBUG
-#pragma omp barrier
   clock_t end_clock = cpu_time();
 #endif
 
@@ -323,8 +320,9 @@ void ConvolutionLayerFFT<Dtype>::transform_blob_to_real_array(int N,
 
   // set everything to 0 before --> so not set weights are 0-padded :)
   caffe_memset(this->fft_real_size_ * num_arr * sizeof(Dtype), 0., padded_real_data);
-
+#ifdef _OPENMP
   #pragma omp parallel for
+#endif
   for (int n = 0; n < N; n++) {
     for (int k = 0; k < K; k++) {
       for (int h = 0; h < H; h++) {
@@ -424,9 +422,10 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
   std::complex<Dtype> *weight_complex = this->fft_weights_out_complex_;
   std::complex<Dtype> *res_complex = this->fft_conv_result_complex_;
 
-
+#ifdef _OPENMP
   #pragma omp parallel for \
           private(n, k, h, w) shared(res_complex, in_complex, weight_complex)
+#endif
   for (n = 0; n < N; ++n) {
     // check which group_ idx we are in
     const int group_idx = n / weight_group_size;
@@ -476,7 +475,9 @@ void ConvolutionLayerFFT<Dtype>::normalize_ifft_result(Blob<Dtype> *top) {
   int N = this->num_output_;
   // int K = (this->channels_ / this->group_);
 
+#ifdef _OPENMP
   #pragma omp parallel for
+#endif
   for (int n = 0; n < N; ++n) {
     //for (int k = 0; k < K; ++k) {
       // 1 op
