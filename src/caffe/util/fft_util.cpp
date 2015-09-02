@@ -69,8 +69,23 @@ void *fft_plan_many_dft_r2c_2d<double>(int n0,
                                        double *in,
                                        std::complex<double> *out,
                                        unsigned flags) {
-  // TODO: implement double version!!
-  return NULL;
+  int rank = 2;
+  int n[] = {n0, n1};
+  int idist = n0 * n1; /* = 256*256, the distance in memory
+                                          between the first element
+                                          of the first array and the
+                                          first element of the second array */
+  int istride = 1; /* array is contiguous in memory */
+  int *inembed = NULL;
+
+  // out
+  int odist = n0 * (n1 / 2 + 1);
+  int ostride = 1;
+  int *onembed = NULL;
+
+  return reinterpret_cast<void *>(fftw_plan_many_dft_r2c(rank, n, how_many, in, inembed, istride, idist,
+                                                          reinterpret_cast<fftw_complex *>(out), onembed, ostride,
+                                                          odist, flags));
 }
 
 template<>
@@ -94,8 +109,6 @@ void *fft_plan_many_dft_c2r_2d<float>(int n0,
   int ostride = 1;
   int *onembed = NULL;
 
-
-  // return reinterpret_cast<void *>(fftwf_plan_dft_c2r_2d(n0, n1, reinterpret_cast<fftwf_complex *>(in), out, flags));
   return reinterpret_cast<void *>(fftwf_plan_many_dft_c2r(rank,
                                                           n,
                                                           how_many,
@@ -117,8 +130,34 @@ void *fft_plan_many_dft_c2r_2d<double>(int n0,
                                        std::complex<double> *in,
                                        double *out,
                                        unsigned flags) {
-  // TODO: implement double version!!
-  return NULL;
+
+  int rank = 2;
+  int n[] = {n0, n1};
+  int idist = n0 * (n1 / 2 + 1); /* = 256*129, the distance in memory
+                                          between the first element
+                                          of the first array and the
+                                          first element of the second array */
+  int istride = 1; /* array is contiguous in memory */
+  int *inembed = NULL;
+
+  // out
+  int odist = n0 * n1;
+  int ostride = 1;
+  int *onembed = NULL;
+
+
+  return reinterpret_cast<void *>(fftw_plan_many_dft_c2r(rank,
+                                                          n,
+                                                          how_many,
+                                                          reinterpret_cast<fftw_complex *>(in),
+                                                          inembed,
+                                                          istride,
+                                                          idist,
+                                                          out,
+                                                          onembed,
+                                                          ostride,
+                                                          odist,
+                                                          flags));
 }
 
 

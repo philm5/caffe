@@ -1,4 +1,5 @@
 #include <vector>
+#include <caffe/util/fft_util.hpp>
 
 #include "caffe/filler.hpp"
 #include "caffe/layer.hpp"
@@ -25,9 +26,14 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->cpu_data();
     Dtype* top_data = top[i]->mutable_cpu_data();
+
+
     for (int n = 0; n < this->num_; ++n) {
+      double begin_clock = cpu_time();
       this->forward_cpu_gemm(bottom_data + bottom[i]->offset(n), weight,
-          top_data + top[i]->offset(n));
+                             top_data + top[i]->offset(n));
+      double end_clock = cpu_time();
+      LOG(ERROR) << "!!! FORWARD took " << 1000.0 * (end_clock - begin_clock) << " ms.";
 
       if (this->bias_term_) {
         const Dtype* bias = this->blobs_[1]->cpu_data();

@@ -14,7 +14,7 @@
 #endif
 // #define WRITE_ARRAYS_T0_DISK
 
-// #define WRITE_DEBUG
+#define WRITE_DEBUG
 
 namespace caffe {
 template<typename Dtype>
@@ -129,14 +129,11 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom
     // if weights were converted alrdy don't do that again :)
     this->convert_weights_fft();
   }
-#ifdef WRITE_DEBUG
+
   double begin_clock = cpu_time();
-#endif
   this->Forward_cpu_fft(bottom, top);
-#ifdef WRITE_DEBUG
   double end_clock = cpu_time();
   LOG(ERROR) << "!!! FORWARD took " << 1000.0 * (end_clock - begin_clock) << " ms.";
-#endif
 }
 
 
@@ -415,7 +412,8 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
     for (k = 0; k < K; ++k) {
       // get the input_k. this is the k we use to index the input k-dimension. the max input_k is group_ times more
       // than the max k of the weight.
-      const int input_k = k + group_idx * K;
+      const int input_k = k + group_idx * K; // 2 ops
+      const int weight_offset = (n * K + k); // 2 ops
 
       /* in the following loops every filter response is being calculated. there are num_output_ * (channels_ / group_) filters...
        * each (1/group_) part is multiplied with each part of the input. e.g. for group_ = 2, n_o_ 256 and c_ = 96:
@@ -426,10 +424,10 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
       for (h = 0; h < H; ++h) {
         for (w = 0; w < W; ++w) {
           // Indexing: ((n * K + k) * H + h) * W + w
-          const int input_idx = (input_k * H + h) * W + w;
+          const int input_idx = (input_k * H + h) * W + w; // 4 ops
           const std::complex<Dtype> input = in_complex[input_idx];
 
-          const int weight_idx = ((n * K + k) * H + h) * W + w;
+          const int weight_idx = (weight_offset * H + h) * W + w; // 4 ops
           const std::complex<Dtype> weight = weight_complex[weight_idx];
 
           // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
@@ -439,9 +437,9 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
           Dtype c = std::real(input);
           Dtype d = std::imag(input);
 
-          const int res_idx = (n * H + h) * W + w; // before with channels: ((n * K + k) * H + h) * W + w;
-          std::complex<Dtype> res(a * c - b * d, b * c + a * d);
-          res_complex[res_idx] += res;
+          const int res_idx = (n * H + h) * W + w; // 4 ops; before with channels: ((n * K + k) * H + h) * W + w;
+          std::complex<Dtype> res(a * c - b * d, b * c + a * d); // 6 ops
+          res_complex[res_idx] += res; // 2 ops
         }
       }
     }
@@ -460,27 +458,28 @@ void ConvolutionLayerFFT<Dtype>::normalize_ifft_result(Blob<Dtype> *top) {
   #pragma omp parallel for
   for (int n = 0; n < N; ++n) {
     //for (int k = 0; k < K; ++k) {
+      // 1 op
       int offset_res_real = n * this->fft_real_size_; // before with channels: (n * K + k) * this->fft_real_size_;
 
       for (int h = 0; h < this->height_out_; ++h) // =55 in 1st layer
       {
         // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
         // idx (kernel_h_ - 1). The stride times the idx of the output pixel will be added onto this.
-        int h_idx = (this->kernel_h_ - 1) + h * this->stride_h_;
+        int h_idx = (this->kernel_h_ - 1) + h * this->stride_h_; // 3 ops
 
         for (int w = 0; w < this->width_out_; ++w) // =55 in 1st layer
         {
           // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
           // idx (kernel_w_ - 1). The stride times the idx of the output pixel will be added onto this.
-          int w_idx = (this->kernel_w_ - 1) + w * this->stride_w_;
+          int w_idx = (this->kernel_w_ - 1) + w * this->stride_w_; // 3 ops
           //((n * K + k) * H + h) * W + w;
-          int top_data_idx = (n * this->height_out_ + h) * this->width_out_ + w;
+          int top_data_idx = (n * this->height_out_ + h) * this->width_out_ + w; // 4 ops
 
           // the index in the data of the convolution result array (the real one)
-          int res_data_idx = offset_res_real + h_idx * this->fft_width_ + w_idx;
+          int res_data_idx = offset_res_real + h_idx * this->fft_width_ + w_idx; // 3 ops
 
           // normalize fft and sum up everything from the input channels...
-          top_data[top_data_idx] = this->fft_conv_result_real_[res_data_idx] * ifft_normalize_factor;
+          top_data[top_data_idx] = this->fft_conv_result_real_[res_data_idx] * ifft_normalize_factor; // 1 op
         }
       }
    // }
