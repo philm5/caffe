@@ -45,9 +45,11 @@ list(APPEND Caffe_LINKER_LIBS ${Snappy_LIBRARIES})
 
 # ---[ fftw
 find_package(FFTW REQUIRED)
-list(APPEND Caffe_LINKER_LIBS ${FFTW_LIBRARIES})
-find_package(FFTWF REQUIRED)
-list(APPEND Caffe_LINKER_LIBS ${FFTWF_LIBRARIES})
+list(APPEND Caffe_LINKER_LIBS ${FFTWD_LIB} ${FFTWF_LIB})
+#find_package(FFTWF REQUIRED)
+#list(APPEND Caffe_LINKER_LIBS ${FFTWF_LIBRARIES})
+
+message(${FFTWF_LIBRARIES})
 
 # ---[ CUDA
 include(cmake/Cuda.cmake)

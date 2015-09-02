@@ -15,7 +15,18 @@ namespace caffe
 {
     double cpu_time(void);
 
-    template<typename Dtype> 
+
+
+#ifdef _OPENMP
+    template<typename Dtype>
+    void fft_init_threads();
+
+    template<typename Dtype>
+    void fft_plan_with_nthreads(int n);
+#endif
+
+
+    template<typename Dtype>
     void *fft_cpu_malloc(size_t n);
 
     template <typename Dtype>

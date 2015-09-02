@@ -16,6 +16,28 @@ double cpu_time(void)
     return value;
 }
 
+#ifdef _OPENMP
+template<>
+void fft_init_threads<float>() {
+  fftwf_init_threads();
+}
+
+template<>
+void fft_init_threads<double>() {
+  fftw_init_threads();
+}
+
+template<>
+void fft_plan_with_nthreads<float>(int n) {
+  fftwf_plan_with_nthreads(n);
+}
+
+template<>
+void fft_plan_with_nthreads<double>(int n) {
+  fftw_plan_with_nthreads(n);
+}
+#endif
+
 template<>
 void *fft_cpu_malloc<float>(size_t n) {
   return reinterpret_cast<void *>(fftwf_malloc(n));
