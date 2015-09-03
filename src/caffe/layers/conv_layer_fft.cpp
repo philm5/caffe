@@ -13,7 +13,6 @@
 #include <sys/time.h>
 #endif
 // #define WRITE_ARRAYS_T0_DISK
-
 // #define WRITE_DEBUG
 // #define WRITE_DEBUG_FW
 
@@ -71,8 +70,8 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
     LOG(WARNING) << "FFT Convolution Layer: omp_get_max_threads() =" << num_of_threads_;
     num_of_threads_ = 1;
   }
-  fft_init_threads<Dtype>();
-  fft_plan_with_nthreads<Dtype>(this->num_of_threads_);
+  fft_cpu_init_threads<Dtype>();
+  fft_cpu_plan_with_nthreads<Dtype>(this->num_of_threads_);
 #endif
 
   // set fft width and height to be the image width and height (for now without padding...)
@@ -113,7 +112,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
 #endif
 
   // The plan. Is a plan for the actual conversion. Conversion will be done when weights are rdy...
-  this->fft_weight_plan_ = fft_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
+  this->fft_weight_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
                                                      this->fft_width_,
                                                      num_weights,
                                                      this->fft_weights_in_real_,
@@ -159,6 +158,9 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype> *> &bo
       }
     }
   }
+#ifdef _OPENMP
+  void fftw_cleanup_threads(void);
+#endif
 }
 
 template<typename Dtype>
@@ -171,7 +173,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
 
   // ---------------------------------------------------
   // The plan to compute the input values to complex
-  this->fft_input_plan_ = fft_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
+  this->fft_input_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
                                                           this->fft_width_,
                                                           this->channels_,
                                                           this->fft_input_real_,
@@ -181,7 +183,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
   this->convert_bottom(bottom);
 
   // Destroy input plan...
-  fft_destroy_plan<Dtype>(this->fft_input_plan_);
+  fft_cpu_destroy_plan<Dtype>(this->fft_input_plan_);
 
   size_t conv_result_complex_size = this->fft_complex_size_ * this->num_output_ * sizeof(std::complex<Dtype>);
 
@@ -217,22 +219,22 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
   caffe_memset(conv_result_real_size, 0., this->fft_conv_result_real_);
 
   // The ifft plan; the backward conversion from c2r
-  this->ifft_plan_ = fft_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
-                                                     this->fft_width_,
-                                                     this->num_output_,
-                                                     this->fft_conv_result_complex_,
-                                                     this->fft_conv_result_real_,
-                                                     FFTW_ESTIMATE);
+  this->ifft_plan_ = fft_cpu_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
+                                                         this->fft_width_,
+                                                         this->num_output_,
+                                                         this->fft_conv_result_complex_,
+                                                         this->fft_conv_result_real_,
+                                                         FFTW_ESTIMATE);
 
 
 #ifdef WRITE_DEBUG
   begin_clock = cpu_time();
   // execute the actual ifft
 #endif
-  fft_execute_plan<Dtype>(this->ifft_plan_);
+  fft_cpu_execute_plan<Dtype>(this->ifft_plan_);
 
   // Destroy input plan...
-  fft_destroy_plan<Dtype>(this->ifft_plan_);
+  fft_cpu_destroy_plan<Dtype>(this->ifft_plan_);
 #ifdef WRITE_DEBUG
   end_clock = cpu_time();
 #endif
@@ -284,11 +286,11 @@ void ConvolutionLayerFFT<Dtype>::convert_bottom(const Blob<Dtype> *bottom) {
                0.,
                this->fft_input_complex_);
 #ifdef WRITE_DEBUG
-  clock_t begin_clock = cpu_time();
+  double begin_clock = cpu_time();
 #endif
-  fft_execute_plan<Dtype>(this->fft_input_plan_);
+  fft_cpu_execute_plan<Dtype>(this->fft_input_plan_);
 #ifdef WRITE_DEBUG
-  clock_t end_clock = cpu_time();
+  double end_clock = cpu_time();
 #endif
 
 #ifndef WRITE_ARRAYS_T0_DISK
@@ -378,13 +380,14 @@ void ConvolutionLayerFFT<Dtype>::convert_weights_fft() {
 #ifdef WRITE_DEBUG
   LOG(ERROR) << "weights complex CHANGE: memset 0";
 
-  clock_t begin_clock = cpu_time();
+  double begin_clock = cpu_time();
 #endif
-  fft_execute_plan<Dtype>(this->fft_weight_plan_);
+  fft_cpu_execute_plan<Dtype>(this->fft_weight_plan_);
 
 #ifdef WRITE_DEBUG
+#pragma omp barrier
   LOG(ERROR) << "weights complex CHANGE: fft_weight_plan_";
-  clock_t end_clock = cpu_time();
+  double end_clock = cpu_time();
 #endif
 
 #ifndef WRITE_ARRAYS_T0_DISK

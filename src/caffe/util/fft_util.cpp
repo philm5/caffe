@@ -5,36 +5,45 @@
 
 namespace caffe {
 
-double cpu_time(void)
-{
+double cpu_time(void) {
   double value;
 #ifdef _OPENMP
   value = omp_get_wtime();
 #else
   value = (double) clock () / (double) CLOCKS_PER_SEC;
 #endif
-    return value;
+  return value;
 }
 
 #ifdef _OPENMP
 template<>
-void fft_init_threads<float>() {
+void fft_cpu_init_threads<float>() {
   fftwf_init_threads();
 }
 
 template<>
-void fft_init_threads<double>() {
+void fft_cpu_init_threads<double>() {
   fftw_init_threads();
 }
 
 template<>
-void fft_plan_with_nthreads<float>(int n) {
+void fft_cpu_plan_with_nthreads<float>(int n) {
   fftwf_plan_with_nthreads(n);
 }
 
 template<>
-void fft_plan_with_nthreads<double>(int n) {
+void fft_cpu_plan_with_nthreads<double>(int n) {
   fftw_plan_with_nthreads(n);
+}
+
+template<>
+void fft_cpu_cleanup_threads<float>() {
+  fftwf_cleanup_threads();
+}
+
+template<>
+void fft_cpu_cleanup_threads<double>() {
+  fftw_cleanup_threads();
 }
 #endif
 
@@ -49,17 +58,17 @@ void *fft_cpu_malloc<double>(size_t n) {
 }
 
 template<>
-void *fft_plan_dft_r2c_2d<float>(int n0, int n1, float *in, std::complex<float> *out, unsigned flags) {
+void *fft_cpu_plan_dft_r2c_2d<float>(int n0, int n1, float *in, std::complex<float> *out, unsigned flags) {
   return reinterpret_cast<void *>(fftwf_plan_dft_r2c_2d(n0, n1, in, reinterpret_cast<fftwf_complex *>(out), flags));
 }
 
 template<>
-void *fft_plan_dft_r2c_2d<double>(int n0, int n1, double *in, std::complex<double> *out, unsigned flags) {
+void *fft_cpu_plan_dft_r2c_2d<double>(int n0, int n1, double *in, std::complex<double> *out, unsigned flags) {
   return reinterpret_cast<void *>(fftw_plan_dft_r2c_2d(n0, n1, in, reinterpret_cast<fftw_complex *>(out), flags));
 }
 
 template<>
-void *fft_plan_many_dft_r2c_2d<float>(int n0,
+void *fft_cpu_plan_many_dft_r2c_2d<float>(int n0,
                                       int n1,
                                       int how_many,
                                       float *in,
@@ -85,7 +94,7 @@ void *fft_plan_many_dft_r2c_2d<float>(int n0,
 }
 
 template<>
-void *fft_plan_many_dft_r2c_2d<double>(int n0,
+void *fft_cpu_plan_many_dft_r2c_2d<double>(int n0,
                                        int n1,
                                        int how_many,
                                        double *in,
@@ -106,12 +115,12 @@ void *fft_plan_many_dft_r2c_2d<double>(int n0,
   int *onembed = NULL;
 
   return reinterpret_cast<void *>(fftw_plan_many_dft_r2c(rank, n, how_many, in, inembed, istride, idist,
-                                                          reinterpret_cast<fftw_complex *>(out), onembed, ostride,
-                                                          odist, flags));
+                                                         reinterpret_cast<fftw_complex *>(out), onembed, ostride,
+                                                         odist, flags));
 }
 
 template<>
-void *fft_plan_many_dft_c2r_2d<float>(int n0,
+void *fft_cpu_plan_many_dft_c2r_2d<float>(int n0,
                                       int n1,
                                       int how_many,
                                       std::complex<float> *in,
@@ -146,7 +155,7 @@ void *fft_plan_many_dft_c2r_2d<float>(int n0,
 }
 
 template<>
-void *fft_plan_many_dft_c2r_2d<double>(int n0,
+void *fft_cpu_plan_many_dft_c2r_2d<double>(int n0,
                                        int n1,
                                        int how_many,
                                        std::complex<double> *in,
@@ -169,37 +178,37 @@ void *fft_plan_many_dft_c2r_2d<double>(int n0,
 
 
   return reinterpret_cast<void *>(fftw_plan_many_dft_c2r(rank,
-                                                          n,
-                                                          how_many,
-                                                          reinterpret_cast<fftw_complex *>(in),
-                                                          inembed,
-                                                          istride,
-                                                          idist,
-                                                          out,
-                                                          onembed,
-                                                          ostride,
-                                                          odist,
-                                                          flags));
+                                                         n,
+                                                         how_many,
+                                                         reinterpret_cast<fftw_complex *>(in),
+                                                         inembed,
+                                                         istride,
+                                                         idist,
+                                                         out,
+                                                         onembed,
+                                                         ostride,
+                                                         odist,
+                                                         flags));
 }
 
 
 template<>
-void fft_execute_plan<float>(const void *plan_handle) {
+void fft_cpu_execute_plan<float>(const void *plan_handle) {
   fftwf_execute((const fftwf_plan) plan_handle);
 }
 
 template<>
-void fft_execute_plan<double>(const void *plan_handle) {
+void fft_cpu_execute_plan<double>(const void *plan_handle) {
   fftw_execute((const fftw_plan) plan_handle);
 }
 
 template<>
-void fft_destroy_plan<float>(const void *plan_handle) {
+void fft_cpu_destroy_plan<float>(const void *plan_handle) {
   fftwf_destroy_plan((const fftwf_plan) plan_handle);
 }
 
 template<>
-void fft_destroy_plan<double>(const void *plan_handle) {
+void fft_cpu_destroy_plan<double>(const void *plan_handle) {
   fftw_destroy_plan((const fftw_plan) plan_handle);
 }
 
