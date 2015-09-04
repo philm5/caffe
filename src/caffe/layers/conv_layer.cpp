@@ -39,7 +39,7 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                              top_data + top[i]->offset(n));
  #ifdef WRITE_DEBUG_FW
       double end_clock = cpu_time();
-      LOG(ERROR) << "!!! FORWARD took " << 1000.0 * (end_clock - begin_clock) << " ms.";
+      LOG(ERROR) << this->layer_param().name() << ": " << 1000.0 * (end_clock - begin_clock) << " ms.";
  #endif
 
       if (this->bias_term_) {

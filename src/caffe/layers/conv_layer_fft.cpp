@@ -19,13 +19,8 @@
 namespace caffe {
 template<typename Dtype>
 ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
-#ifdef WRITE_DEBUG
-  LOG(ERROR) << "called ~ConvolutionLayerFFT()... ";
-#endif
-
   fft_cpu_free<Dtype>(fft_weights_out_complex_);
 #ifdef WRITE_DEBUG
-  LOG(ERROR) << "weights complex CHANGE: FREE";
   LOG(ERROR) << "complex weights freed.";
 #endif
 }
@@ -34,20 +29,11 @@ template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype> *> &bottom,
                                             const vector<Blob<Dtype> *> &top) {
   ConvolutionLayer<Dtype>::LayerSetUp(bottom, top);
-
- #ifdef WRITE_DEBUG
-  LOG(ERROR) << "called base\nConvolutionLayerFFT::LayerSetUp";
-#endif
-
 }
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Reshape(const vector<Blob<Dtype> *> &bottom, const vector<Blob<Dtype> *> &top) {
   ConvolutionLayer<Dtype>::Reshape(bottom, top);
-#ifdef WRITE_DEBUG
-  LOG(ERROR) << "called base\nConvolutionLayerFFT::Reshape";
-#endif
-
   if (!this->weights_converted_) {
     this->fft_set_up();
   }
@@ -58,9 +44,6 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
   // here only the memory should be reserved... The weight data will
   // either be trained or loaded from disk. So there is no data available
   // yet...
-#ifdef WRITE_DEBUG
-  LOG(ERROR) << "ConvolutionLayerFFT::fft_set_up";
-#endif
 
   // ---- openmp ------------------------------------------
   num_of_threads_ = 1;
@@ -107,10 +90,6 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
   this->weight_alloc_size_out = this->fft_complex_size_ * num_weights * sizeof(std::complex<Dtype>);
   this->fft_weights_out_complex_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->weight_alloc_size_out));
 
-#ifdef WRITE_DEBUG
-  LOG(ERROR) << "weights complex CHANGE: cpu_malloc";
-#endif
-
   // The plan. Is a plan for the actual conversion. Conversion will be done when weights are rdy...
   this->fft_weight_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
                                                      this->fft_width_,
@@ -122,15 +101,10 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom, const vector<Blob<Dtype> *> &top) {
-#ifdef WRITE_DEBUG
-  LOG(ERROR) << "ConvolutionLayerFFT::Forward_cpu";
-  LOG(ERROR) << "bottom size: " << bottom.size();
-#endif
   if (!this->weights_converted_) {
     // if weights were converted alrdy don't do that again :)
     this->convert_weights_fft();
   }
-
 
 #ifdef WRITE_DEBUG_FW
   double begin_clock = cpu_time();
@@ -138,7 +112,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype> *> &bottom
   this->Forward_cpu_fft(bottom, top);
  #ifdef WRITE_DEBUG_FW
   double end_clock = cpu_time();
-  LOG(ERROR) << "!!! FORWARD took " << 1000.0 * (end_clock - begin_clock) << " ms.";
+  LOG(ERROR) << this->layer_param().name() << ": " << 1000.0 * (end_clock - begin_clock) << " ms.";
  #endif
 }
 
@@ -159,7 +133,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype> *> &bo
     }
   }
 #ifdef _OPENMP
-  void fftw_cleanup_threads(void);
+  fft_cpu_cleanup_threads<Dtype>();
 #endif
 }
 
@@ -243,26 +217,22 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
   fft_cpu_free<Dtype>(this->fft_conv_result_complex_);
 
 #ifdef WRITE_DEBUG
-  LOG(ERROR) << "ifft took " << 1000.0 * (end_clock - begin_clock) / CLOCKS_PER_SEC << " ms.";
+  LOG(ERROR) << "ifft took " << 1000.0 * (end_clock - begin_clock)<< " ms.";
 #endif
 
   this->normalize_ifft_result(top);
 
-  // free the real result memory
 #ifndef WRITE_ARRAYS_T0_DISK
+  // free the real result memory
   fft_cpu_free<Dtype>(this->fft_conv_result_real_);
 #endif
 
-
-//#define WRITE_TOP_RES
 #ifdef WRITE_TOP_RES
   std::stringstream ss;
   ss << "res_top_fft_" << this->layer_param_.name() << ".txt";
   const char *s = ss.str().c_str();
   this->write_simple_arr_to_disk(s, top[0]->count() , top[0]->cpu_data());
 #endif
-
-
 
 #ifdef WRITE_ARRAYS_T0_DISK
   int N = this->num_output_;
@@ -298,7 +268,7 @@ void ConvolutionLayerFFT<Dtype>::convert_bottom(const Blob<Dtype> *bottom) {
 #endif
 
 #ifdef WRITE_DEBUG
-  LOG(ERROR) << "fft for bottom data took " << 1000.0 * (end_clock - begin_clock) / CLOCKS_PER_SEC << " ms.";
+  LOG(ERROR) << "fft for bottom data took " << 1000.0 * (end_clock - begin_clock)<< " ms.";
 #endif
 
 #ifdef WRITE_ARRAYS_T0_DISK
@@ -378,15 +348,11 @@ void ConvolutionLayerFFT<Dtype>::convert_weights_fft() {
   caffe_memset(this->fft_complex_size_ * N * K * sizeof(std::complex<Dtype>), 0.,
                this->fft_weights_out_complex_);
 #ifdef WRITE_DEBUG
-  LOG(ERROR) << "weights complex CHANGE: memset 0";
-
   double begin_clock = cpu_time();
 #endif
   fft_cpu_execute_plan<Dtype>(this->fft_weight_plan_);
 
 #ifdef WRITE_DEBUG
-#pragma omp barrier
-  LOG(ERROR) << "weights complex CHANGE: fft_weight_plan_";
   double end_clock = cpu_time();
 #endif
 
@@ -395,7 +361,7 @@ void ConvolutionLayerFFT<Dtype>::convert_weights_fft() {
 #endif
 
 #ifdef WRITE_DEBUG
-  LOG(ERROR) << "fft for one layer took " << 1000.0 * (end_clock - begin_clock) / CLOCKS_PER_SEC << " ms.";
+  LOG(ERROR) << "fft for weight layer took " << 1000.0 * (end_clock - begin_clock) << " ms.";
 #endif
 
   this->weights_converted_ = true;
