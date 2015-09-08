@@ -210,6 +210,11 @@ protected:
      */
     virtual void Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
                                  const vector<Blob<Dtype>*>& top);
+    /**
+     * @brief begins the forward propagation with mtx mult!
+     */
+    virtual void Forward_cpu_normal(const vector<Blob<Dtype>*>& bottom,
+                                 const vector<Blob<Dtype>*>& top);
 
     /**
      * @brief The fft task for a single input.
@@ -225,6 +230,8 @@ protected:
      * @brief Multiplies the converted fft values to do the convolution
      */
     virtual void convolve_fft();
+
+    virtual void convolve_fft_old();
 
     /**
      * @brief Normalizes the ifft result and writes it to the top layer.
@@ -269,6 +276,7 @@ protected:
 
     // results
     std::complex<Dtype> *fft_conv_result_complex_;
+    std::complex<Dtype> *fft_summed_up_result_complex_;
     Dtype *fft_conv_result_real_;
 
     void write_simple_arr_to_disk(const char *output_name, int size, const Dtype *arr);
@@ -276,6 +284,7 @@ protected:
     size_t weight_alloc_size_in;
     size_t weight_alloc_size_out;
     int num_of_threads_;
+    bool fft_on_;
 };
 
 /**

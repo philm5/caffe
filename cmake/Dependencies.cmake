@@ -49,7 +49,6 @@ list(APPEND Caffe_LINKER_LIBS ${FFTWD_LIB} ${FFTWF_LIB})
 #find_package(FFTWF REQUIRED)
 #list(APPEND Caffe_LINKER_LIBS ${FFTWF_LIBRARIES})
 
-message(${FFTWF_LIBRARIES})
 
 # ---[ CUDA
 include(cmake/Cuda.cmake)
@@ -75,7 +74,7 @@ message(STATUS "OpenCV found (${OpenCV_CONFIG_PATH})")
 
 # ---[ BLAS
 if(NOT APPLE)
-  set(BLAS "Atlas" CACHE STRING "Selected BLAS library")
+  set(BLAS "mkl" CACHE STRING "Selected BLAS library")
   set_property(CACHE BLAS PROPERTY STRINGS "Atlas;Open;MKL")
 
   if(BLAS STREQUAL "Atlas" OR BLAS STREQUAL "atlas")

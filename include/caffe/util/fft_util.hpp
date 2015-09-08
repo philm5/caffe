@@ -10,6 +10,7 @@
 
 #include <fftw3.h>
 #include <complex>
+#include "caffe/util/mkl_alternate.hpp"
 
 namespace caffe {
 double cpu_time(void);
@@ -26,6 +27,12 @@ template<typename Dtype>
 void fft_cpu_cleanup_threads();
 #endif
 
+
+template <typename Dtype>
+void caffe_complex_mul(const int N, const std::complex<Dtype> *a, const std::complex<Dtype> *b, std::complex<Dtype> *y);
+
+template <typename Dtype>
+void caffe_complex_add(const int N, const std::complex<Dtype> *a, const std::complex<Dtype> *b, std::complex<Dtype> *y);
 
 template<typename Dtype>
 void *fft_cpu_malloc(size_t n);
