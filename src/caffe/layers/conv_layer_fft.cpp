@@ -34,12 +34,12 @@ void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype> *> &bottom,
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Reshape(const vector<Blob<Dtype> *> &bottom, const vector<Blob<Dtype> *> &top) {
   ConvolutionLayer<Dtype>::Reshape(bottom, top);
-//  if (this->layer_param().name() != "conv2") // || this->layer_param().name() == "conv2")
-//  {
-//    // do normal convolution...
-//    this->fft_on_ = false;
-//  }
-//  else
+  if (this->layer_param().name() == "conv1")
+  {
+    // do normal convolution...
+    this->fft_on_ = false;
+  }
+  else
   {
     if (!this->weights_converted_) {
       this->fft_set_up();
