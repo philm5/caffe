@@ -72,6 +72,18 @@ void caffe_complex_add<double>(const int n, const std::complex<double> *a, const
   vzAdd(n, reinterpret_cast<const MKL_Complex16 *> (a), reinterpret_cast<const MKL_Complex16 *> (b), reinterpret_cast<MKL_Complex16 *> (y));
 }
 
+template <>
+void ipp_complex_add_product<float>(const std::complex<float> *src1, const std::complex<float> *src2, std::complex<float> *dst, int len)
+{
+  ippsAddProduct_32fc(reinterpret_cast<const Ipp32fc *> (src1), reinterpret_cast<const Ipp32fc *> (src2), reinterpret_cast<Ipp32fc *> (dst), len);
+}
+
+template <>
+void ipp_complex_add_product<double>(const std::complex<double> *src1, const std::complex<double> *src2, std::complex<double> *dst, int len)
+{
+  ippsAddProduct_64fc(reinterpret_cast<const Ipp64fc *> (src1), reinterpret_cast<const Ipp64fc *> (src2), reinterpret_cast<Ipp64fc *> (dst), len);
+}
+
 template<>
 void *fft_cpu_malloc<float>(size_t n) {
   return reinterpret_cast<void *>(fftwf_malloc(n));

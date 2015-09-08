@@ -306,6 +306,16 @@ ifeq ($(WITH_PYTHON_LAYER), 1)
 	LIBRARIES += $(PYTHON_LIBRARIES)
 endif
 
+# IPP ?
+IPP ?= 1
+ifeq ($(IPP), 1)
+	DIR_IPP_LIB.x86_64 := $(IPPROOT)/lib/intel64
+	DIR_LIB.i686       := $(IPPROOT)/lib/ia32
+	LIBRARY_DIRS       += $(DIR_LIB.$(ARCH))
+	LIBRARIES          += ippi ipps ippcore
+	INCLUDE_DIRS       += $(IPPROOT)/include
+endif
+
 # BLAS configuration (default = ATLAS)
 BLAS ?= atlas
 ifeq ($(BLAS), mkl)

@@ -34,12 +34,12 @@ void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype> *> &bottom,
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Reshape(const vector<Blob<Dtype> *> &bottom, const vector<Blob<Dtype> *> &top) {
   ConvolutionLayer<Dtype>::Reshape(bottom, top);
-  if (this->layer_param().name() == "conv1")
-  {
-    // do normal convolution...
-    this->fft_on_ = false;
-  }
-  else
+//  if (this->layer_param().name() != "conv2") // || this->layer_param().name() == "conv2")
+//  {
+//    // do normal convolution...
+//    this->fft_on_ = false;
+//  }
+//  else
   {
     if (!this->weights_converted_) {
       this->fft_set_up();
@@ -208,24 +208,23 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
   fft_cpu_destroy_plan<Dtype>(this->fft_input_plan_);
 
   size_t summed_result_size_complex = this->fft_complex_size_ * this->num_output_ * sizeof(std::complex<Dtype>);
-  this->fft_summed_up_result_complex_ =
-      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(summed_result_size_complex));
-
-  // set complex mem to 0
-  caffe_memset(summed_result_size_complex, 0., this->fft_summed_up_result_complex_);
+//  this->fft_summed_up_result_complex_ =
+//      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(summed_result_size_complex));
+//
+//  // set complex mem to 0
+//  caffe_memset(summed_result_size_complex, 0., this->fft_summed_up_result_complex_);
 
   // alloc data for result
   this->fft_conv_result_complex_ =
-      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(weight_alloc_size_out));
+      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(summed_result_size_complex));
 
   // set complex mem to 0
-  caffe_memset(weight_alloc_size_out, 0., this->fft_conv_result_complex_);
+  caffe_memset(summed_result_size_complex, 0., this->fft_conv_result_complex_);
 
 #ifdef WRITE_DEBUG
   double begin_clock = cpu_time();
 #endif
   this->convolve_fft();
-
 #ifdef WRITE_DEBUG
   double end_clock = cpu_time();
 #endif
@@ -251,7 +250,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
   this->ifft_plan_ = fft_cpu_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
                                                          this->fft_width_,
                                                          this->num_output_,
-                                                         this->fft_summed_up_result_complex_,
+                                                         this->fft_conv_result_complex_,
                                                          this->fft_conv_result_real_,
                                                          FFTW_ESTIMATE);
 
@@ -267,8 +266,8 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
 #ifdef WRITE_DEBUG
   end_clock = cpu_time();
 #endif
-  // free the complex result, because it was already ifft-ed to real.
-  fft_cpu_free<Dtype>(this->fft_summed_up_result_complex_);
+//  // free the complex result, because it was already ifft-ed to real.
+//  fft_cpu_free<Dtype>(this->fft_summed_up_result_complex_);
 
   // free the complex result, because it was already ifft-ed to real.
   fft_cpu_free<Dtype>(this->fft_conv_result_complex_);
@@ -431,13 +430,14 @@ void ConvolutionLayerFFT<Dtype>::convert_weights_fft() {
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::convolve_fft() {
-  const int N = this->num_output_ / this->group_;
+  const int N = this->num_output_;
   const int K = this->channels_ / this->group_;
-  const int G = this->group_;
-  const int multiply_size = this->fft_complex_size_ * K;
+
+  const int weight_group_size = N / this->group_;
+  //const int G = this->group_;
+  //const int multiply_size = this->fft_complex_size_ * K;
 
   int n = 0;
-  int g = 0;
   int k = 0;
 
   std::complex<Dtype> *in_complex = this->fft_input_complex_;
@@ -446,32 +446,67 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
 
 #ifdef _OPENMP
 #pragma omp parallel for \
-          private(n, g) shared(res_complex, in_complex, weight_complex)
+          private(n, k) shared(res_complex, in_complex, weight_complex)
 #endif
   for (n = 0; n < N; ++n) {
-    for (g = 0; g < G; ++g) {
-      const int input_offset = g * K * this->fft_complex_size_;
-      const int weight_offset = ((n + g * N) * K) * this->fft_complex_size_;
-      caffe_complex_mul<Dtype>(multiply_size, in_complex + input_offset, weight_complex + weight_offset, res_complex + weight_offset);
-    }
-  }
-
-
-  // sum up result from each channel into one channel. So fewer iffts have to be done!!! (faster!)
-  std::complex<Dtype> *sum_res_complex = this->fft_summed_up_result_complex_;
-
-#ifdef _OPENMP
-#pragma omp parallel for \
-          private(n, k) shared(res_complex, sum_res_complex)
-#endif
-  for (n = 0; n < N * G; ++n) {
-    std::complex<Dtype> *sum_res = this->fft_summed_up_result_complex_ + n * this->fft_complex_size_;
+    const int res_offset = n * this->fft_complex_size_;
+    // check which group_ idx we are in
+    const int group_idx = n / weight_group_size;
     for (k = 0; k < K; ++k) {
-      const int offset_conv_res = (n * K + k) * this->fft_complex_size_;
-      caffe_complex_add(this->fft_complex_size_, sum_res, res_complex + offset_conv_res, sum_res);
+      // get the input_k. this is the k we use to index the input k-dimension. the max input_k is group_ times more
+      // than the max k of the weight.
+      const int input_offset = (k + group_idx * K) * this->fft_complex_size_;
+      const int weight_offset = (n * K + k) * this->fft_complex_size_;
+
+      // pSrcDst[n ] = pSrcDst[n ] + pSrc1[n ] * pSrc2[n ], 0 ≤ n < len.
+      ipp_complex_add_product<Dtype>(in_complex + input_offset, weight_complex + weight_offset, res_complex + res_offset, this->fft_complex_size_);
     }
   }
 }
+
+//template<typename Dtype>
+//void ConvolutionLayerFFT<Dtype>::convolve_fft() {
+//  const int N = this->num_output_ / this->group_;
+//  const int K = this->channels_ / this->group_;
+//  const int G = this->group_;
+//  const int multiply_size = this->fft_complex_size_ * K;
+//
+//  int n = 0;
+//  int g = 0;
+//  int k = 0;
+//
+//  std::complex<Dtype> *in_complex = this->fft_input_complex_;
+//  std::complex<Dtype> *weight_complex = this->fft_weights_out_complex_;
+//  std::complex<Dtype> *res_complex = this->fft_conv_result_complex_;
+//
+//#ifdef _OPENMP
+//#pragma omp parallel for \
+//          private(n, g) shared(res_complex, in_complex, weight_complex)
+//#endif
+//  for (n = 0; n < N; ++n) {
+//    for (g = 0; g < G; ++g) {
+//      const int input_offset = g * K * this->fft_complex_size_;
+//      const int weight_offset = ((n + g * N) * K) * this->fft_complex_size_;
+//      caffe_complex_mul<Dtype>(multiply_size, in_complex + input_offset, weight_complex + weight_offset, res_complex + weight_offset);
+//    }
+//  }
+//
+//
+//  // sum up result from each channel into one channel. So fewer iffts have to be done!!! (faster!)
+//  std::complex<Dtype> *sum_res_complex = this->fft_summed_up_result_complex_;
+//
+//#ifdef _OPENMP
+//#pragma omp parallel for \
+//          private(n, k) shared(res_complex, sum_res_complex)
+//#endif
+//  for (n = 0; n < N * G; ++n) {
+//    std::complex<Dtype> *sum_res = this->fft_summed_up_result_complex_ + n * this->fft_complex_size_;
+//    for (k = 0; k < K; ++k) {
+//      const int offset_conv_res = (n * K + k) * this->fft_complex_size_;
+//      caffe_complex_add(this->fft_complex_size_, sum_res, res_complex + offset_conv_res, sum_res);
+//    }
+//  }
+//}
 
 
 template<typename Dtype>

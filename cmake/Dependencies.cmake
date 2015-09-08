@@ -46,8 +46,11 @@ list(APPEND Caffe_LINKER_LIBS ${Snappy_LIBRARIES})
 # ---[ fftw
 find_package(FFTW REQUIRED)
 list(APPEND Caffe_LINKER_LIBS ${FFTWD_LIB} ${FFTWF_LIB})
-#find_package(FFTWF REQUIRED)
-#list(APPEND Caffe_LINKER_LIBS ${FFTWF_LIBRARIES})
+
+# ---[ ipp
+find_package(IPP REQUIRED)
+include_directories(SYSTEM ${IPP_INCLUDE_DIRS})
+list(APPEND Caffe_LINKER_LIBS ${IPP_LIBRARIES})
 
 
 # ---[ CUDA

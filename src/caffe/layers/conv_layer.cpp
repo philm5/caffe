@@ -9,7 +9,7 @@
 
 namespace caffe {
 
-// #define WRITE_DEBUG_FW
+#define WRITE_DEBUG_FW
 
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::compute_output_shape() {
