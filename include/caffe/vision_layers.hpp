@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 #include <complex>
+#include <caffe/util/im2col.hpp>
 
 #include "caffe/blob.hpp"
 #include "caffe/common.hpp"
@@ -181,6 +182,12 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
+#define FFT_CONVOLUTION_KIND_POINTWISE_IPP 0
+#define FFT_CONVOLUTION_KIND_POINTWISE_MKL 1
+#define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 2
+#define FFT_CONVOLUTION_KIND_CGEMM 3
+
+#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_CGEMM
 public:
     explicit ConvolutionLayerFFT(const LayerParameter& param) : ConvolutionLayer<Dtype>(param), weights_converted_(false) {}
 
@@ -250,7 +257,12 @@ protected:
                                               int pad_h = 0,
                                               int pad_w = 0,
                                               bool flip = false);
-
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  std::complex<Dtype> *fft_transposed_weights_;
+  std::complex<Dtype> *fft_transposed_bottom_;
+  virtual void transpose_weights();
+  virtual void transpose_bottom();
+#endif
     /**
      * @brief Converts the input values to complex.
      */
