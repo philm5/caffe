@@ -30,6 +30,35 @@ void caffe_cpu_gemm<double>(const CBLAS_TRANSPOSE TransA,
   cblas_dgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
       ldb, beta, C, N);
 }
+//
+//void caffe_cpu_gemm_complex(const CBLAS_TRANSPOSE TransA,
+//                            const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+//                            const std::complex<Dtype> * alpha, const std::complex<Dtype> *A, std::complex<Dtype> *B, const std::complex<Dtype> *beta,
+//                            std::complex<Dtype> *C);
+
+template <>
+void caffe_cpu_gemm_complex<float>(const CBLAS_TRANSPOSE TransA,
+                                   const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                                   const std::complex<float> *alpha, const std::complex<float> *A, const std::complex<float> *B, const std::complex<float> *beta,
+                                   std::complex<float> *C) {
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+
+  cblas_cgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
+              ldb, beta, C, N);
+}
+
+template <>
+void caffe_cpu_gemm_complex<double>(const CBLAS_TRANSPOSE TransA,
+                                    const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                                    const std::complex<double> *alpha, const std::complex<double> *A, const std::complex<double> *B, const std::complex<double> *beta,
+                                    std::complex<double> *C) {
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+
+  cblas_zgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
+              ldb, beta, C, N);
+}
 
 template <>
 void caffe_cpu_gemv<float>(const CBLAS_TRANSPOSE TransA, const int M,

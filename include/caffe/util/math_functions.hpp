@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <cmath>  // for std::fabs and std::signbit
+#include <complex>
 
 #include "glog/logging.h"
 
@@ -20,6 +21,12 @@ void caffe_cpu_gemm(const CBLAS_TRANSPOSE TransA,
     const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
     const Dtype alpha, const Dtype* A, const Dtype* B, const Dtype beta,
     Dtype* C);
+
+template <typename Dtype>
+void caffe_cpu_gemm_complex(const CBLAS_TRANSPOSE TransA,
+                            const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                            const std::complex<Dtype> *alpha, const std::complex<Dtype> *A, const std::complex<Dtype> *B, const std::complex<Dtype> *beta,
+                            std::complex<Dtype> *C);
 
 template <typename Dtype>
 void caffe_cpu_gemv(const CBLAS_TRANSPOSE TransA, const int M, const int N,

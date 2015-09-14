@@ -13,8 +13,16 @@
 #include <sys/time.h>
 #endif
 // #define WRITE_ARRAYS_T0_DISK
-// #define WRITE_DEBUG
+#define WRITE_DEBUG
 // #define WRITE_DEBUG_FW
+
+#define FFT_CONVOLUTION_KIND_POINTWISE_IPP 0
+#define FFT_CONVOLUTION_KIND_POINTWISE_MKL 1
+#define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 2
+#define FFT_CONVOLUTION_KIND_CGEMM 3
+
+#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_CGEMM
+
 
 namespace caffe {
 template<typename Dtype>
@@ -34,12 +42,12 @@ void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype> *> &bottom,
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Reshape(const vector<Blob<Dtype> *> &bottom, const vector<Blob<Dtype> *> &top) {
   ConvolutionLayer<Dtype>::Reshape(bottom, top);
-  if (this->layer_param().name() == "conv1")
-  {
-    // do normal convolution...
-    this->fft_on_ = false;
-  }
-  else
+//  if (this->layer_param().name() == "conv1")
+//  {
+//    // do normal convolution...
+//    this->fft_on_ = false;
+//  }
+//  else
   {
     if (!this->weights_converted_) {
       this->fft_set_up();
@@ -186,12 +194,13 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype> *> &bo
 }
 
 template<typename Dtype>
-void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *bottom, Blob<Dtype> *top) {
+void ConvolutionLayerFFT<Dtype>::
+Forward_cpu_fft_single(const Blob<Dtype> *bottom, Blob<Dtype> *top) {
 // Allocations & plan for input values (bottom values)
-  size_t alloc_size_input_real = this->fft_real_size_ * 1 * this->channels_ * sizeof(Dtype);
-  size_t alloc_size_input_complex = this->fft_complex_size_ * 1 * this->channels_ * sizeof(std::complex<Dtype>);
-  this->fft_input_real_ = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(alloc_size_input_real));
-  this->fft_input_complex_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(alloc_size_input_complex));
+  this->alloc_size_input_real = this->fft_real_size_ * 1 * this->channels_ * sizeof(Dtype);
+  this->alloc_size_input_complex = this->fft_complex_size_ * 1 * this->channels_ * sizeof(std::complex<Dtype>);
+  this->fft_input_real_ = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->alloc_size_input_real));
+  this->fft_input_complex_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->alloc_size_input_complex));
 
   // ---------------------------------------------------
   // The plan to compute the input values to complex
@@ -229,7 +238,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
   double end_clock = cpu_time();
 #endif
 
-
+  this->write_arr_to_disk("conv_complex.txt", this->num_output_, this->fft_conv_result_complex_, true);
 
 #ifdef WRITE_DEBUG
   LOG(ERROR) << "fft convolve took " << 1000.0 * (end_clock - begin_clock) << " ms.";
@@ -293,8 +302,8 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Blob<Dtype> *botto
 #ifdef WRITE_ARRAYS_T0_DISK
   int N = this->num_output_;
   int K = (this->channels_ / this->group_);
-  this->write_arr_to_disk("conv_res_real.txt", N*K , this->fft_conv_result_real_);
-  this->write_simple_arr_to_disk("top_data.txt", this->num_output_ * this->height_out_ * this->width_out_, top[0]->mutable_cpu_data());
+  this->write_arr_to_disk("conv_res_real.txt", N , this->fft_conv_result_real_);
+  this->write_simple_arr_to_disk("top_data.txt", this->num_output_ * this->height_out_ * this->width_out_, top->mutable_cpu_data());
 #endif
 }
 
@@ -356,7 +365,7 @@ void ConvolutionLayerFFT<Dtype>::transform_blob_to_real_array(int N,
       for (int h = 0; h < H; h++) {
         for (int w = 0; w < W; w++) {
           // ((n * ch_gr + c) * fft_height_ + h)* 2 * (fft_width_ / 2 + 1) + w
-          int offset_weight_real = (n * K + k) * this->fft_real_size_;
+          const int offset_weight_real = (n * K + k) * this->fft_real_size_;
           // e.g. a 3x3 filter should fit into a 5x5 because the image size is 5x5
           // <--W-->
           // ^ f f f 0 0
@@ -365,7 +374,7 @@ void ConvolutionLayerFFT<Dtype>::transform_blob_to_real_array(int N,
           //   0 0 0 0 0
           //   0 0 0 0 0
 
-          int idx_weight_real = offset_weight_real + (h + pad_h) * this->fft_height_ + (w + pad_w);
+          const int idx_weight_real = offset_weight_real + (h + pad_h) * this->fft_height_ + (w + pad_w);
           // copy each weight into the fft_weights_in_real_
           // get ptr to blob data. indexing see: http://caffe.berkeleyvision.org/tutorial/net_layer_blob.html
           // Blob memory is row-major in layout, so the last / rightmost dimension changes fastest. For example,
@@ -374,8 +383,8 @@ void ConvolutionLayerFFT<Dtype>::transform_blob_to_real_array(int N,
 
           // if flip = true ==> flip the indices of the weights. Caffe actually does not a convolution but a
           // a cross-correlation according to: https://github.com/BVLC/caffe/issues/2513
-          int h_idx = flip ? H - (h + 1) : h;
-          int w_idx = flip ? W - (w + 1) : w;
+          const int h_idx = flip ? H - (h + 1) : h;
+          const int w_idx = flip ? W - (w + 1) : w;
           int idx_weight_in_blob = ((n * K + k) * H + h_idx) * W + w_idx;
 
           padded_real_data[idx_weight_real] = blob_data[idx_weight_in_blob];
@@ -573,22 +582,114 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::convolve_fft() {
-  this->transpose_weights();
 
-}
-
-template<typename Dtype>
-void ConvolutionLayerFFT<Dtype>::transpose_weights() {
   // matrix width  is : H*W*C = this->fft_complex_size_ * this->channels_
   // matrix height is : N_O = this->num_output_
-  const size_t weight_mtx_size = (this->fft_complex_size_ * this->channels_) * this->num_output_ * sizeof(std::complex<Dtype>);
-  this->fft_transposed_weights_ = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(weight_mtx_size));
-}
+  const int H = this->fft_height_;
+  const int W = (this->fft_width_ / 2) + 1;
+  const int G = this->group_;
+  this->fft_transposed_weights_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(weight_alloc_size_out));
+  const int shape[] = {this->num_output_, this->channels_ / this->group_, H, W};
+  const int permutation[] = {2, 3, 0, 1};
+  this->permute_4d(this->fft_weights_out_complex_, this->fft_transposed_weights_, shape, permutation);
 
-template<typename Dtype>
-void ConvolutionLayerFFT<Dtype>::transpose_bottom() {
+  this->fft_transposed_bottom_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->alloc_size_input_complex));
+  const int shape_bottom[] = {1, this->channels_, H, W};
+  const int permutation_bottom[] = {2, 3, 0, 1};
+  this->permute_4d(this->fft_input_complex_, this->fft_transposed_bottom_, shape_bottom, permutation_bottom);
+
+  // alloc data for result
+  size_t summed_result_size_complex = this->fft_complex_size_ * this->num_output_ * sizeof(std::complex<Dtype>);
+  this->fft_transposed_result_ =
+      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(summed_result_size_complex));
+
+  //                      num_output * channels / group = 96 * 3
+  const int weight_size = shape[0] * shape[1];
+
+  //                      num_images      * channels    =  1 * 3
+  const int bottom_size = shape_bottom[0] * shape_bottom[1];
+
+  //                      num_output * num_images       = 96 * 1
+  const int output_size = shape[0] * shape_bottom[0];
+
+  std::complex<Dtype> one_complex(1., 0.);
+  std::complex<Dtype> zero_complex(0., 0.);
+
+  for (int h = 0; h < H; ++h) {
+    for (int w = 0; w < W; ++w) {
+
+      std::complex<Dtype> *weight = this->fft_transposed_weights_ + (h * W + w ) * weight_size;
+      std::complex<Dtype> *input = this->fft_transposed_bottom_ + (h * W + w ) * bottom_size;
+      std::complex<Dtype> *output = this->fft_transposed_result_ + (h * W + w ) * output_size;
+
+      caffe_cpu_gemm_complex<Dtype>(CblasNoTrans, CblasTrans, shape[0], shape_bottom[0], shape[1],
+                                    &one_complex, weight, input, &zero_complex, output);
+    }
+  }
+
+
+
+  // result_dim = 256 x 129 x 96 x 1 ==> 1 x 96 x 256 x 129
+  const int shape_result[] = {H, W, this->num_output_, 1};
+  const int permutation_result[] = {2, 3, 0, 1};
+  this->permute_4d(this->fft_transposed_result_, this->fft_conv_result_complex_, shape_result, permutation_result);
 }
 #endif
+
+
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::permute_4d(const std::complex<Dtype> *in, std::complex<Dtype> *out, const int shape[4], const int permutation[4]) {
+
+#ifdef WRITE_DEBUG
+  double begin_clock = cpu_time();
+#endif
+
+
+  const int N = shape[0];              // 96
+  const int K = shape[1];              // 3
+  const int H = shape[2];              // 256
+  const int W = shape[3];              // 129
+
+  // const int N_T = shape[permutation[0]];
+  const int K_T = shape[permutation[1]];
+  const int H_T = shape[permutation[2]];
+  const int W_T = shape[permutation[3]];
+
+  // indexing is here split up, to speed up loops ((n * K + k) * H + h) * W + w
+
+  int n = 0;
+  int k = 0;
+  int h = 0;
+  int w = 0;
+
+  int *vars[] = {&n, &k, &h, &w};
+
+  int *n_t = vars[permutation[0]];
+  int *k_t = vars[permutation[1]];
+  int *h_t = vars[permutation[2]];
+  int *w_t = vars[permutation[3]];
+
+  for (n = 0; n < N; ++n) {
+    for (k = 0; k < K; ++k) {
+      for (h = 0; h < H; ++h) {
+        for (w = 0; w < W; ++w) {
+
+          const int idx_nt = ((n * K + k) * H + h) * W + w;
+          // alter indexing for t_idx
+          const int idx_t = ((*n_t * K_T + *k_t) * H_T + *h_t) * W_T + *w_t;
+          out[idx_t] = in[idx_nt];
+        }
+      }
+    }
+  }
+
+#ifdef WRITE_DEBUG
+  double end_clock = cpu_time();
+  LOG(ERROR) << "weights transposed.... took:" << 1000.0 * (end_clock - begin_clock) << " ms.";
+  LOG(ERROR) << "weights transposed";
+#endif
+}
 
 
 template<typename Dtype>
@@ -644,7 +745,7 @@ void ConvolutionLayerFFT<Dtype>::write_arr_to_disk(const char *output_name, int 
     for (int i = 0; i < size_multiplier * size; i++) {
       if (is_complex) {
         std::complex<Dtype> *arr_conv = reinterpret_cast<std::complex<Dtype> *>(arr);
-        fout << arr_conv[i].real() << ";" << arr_conv[i].imag() << "\n";
+        fout << arr_conv[i].real() << " + " << arr_conv[i].imag() << " * i\n";
       }
       else {
         Dtype *arr_conv = reinterpret_cast<Dtype *>(arr);

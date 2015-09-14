@@ -182,12 +182,6 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
-#define FFT_CONVOLUTION_KIND_POINTWISE_IPP 0
-#define FFT_CONVOLUTION_KIND_POINTWISE_MKL 1
-#define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 2
-#define FFT_CONVOLUTION_KIND_CGEMM 3
-
-#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_CGEMM
 public:
     explicit ConvolutionLayerFFT(const LayerParameter& param) : ConvolutionLayer<Dtype>(param), weights_converted_(false) {}
 
@@ -238,8 +232,6 @@ protected:
      */
     virtual void convolve_fft();
 
-    virtual void convolve_fft_old();
-
     /**
      * @brief Normalizes the ifft result and writes it to the top layer.
      */
@@ -257,12 +249,12 @@ protected:
                                               int pad_h = 0,
                                               int pad_w = 0,
                                               bool flip = false);
-#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+// #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   std::complex<Dtype> *fft_transposed_weights_;
   std::complex<Dtype> *fft_transposed_bottom_;
-  virtual void transpose_weights();
-  virtual void transpose_bottom();
-#endif
+  std::complex<Dtype> *fft_transposed_result_;
+  virtual void permute_4d(const std::complex<Dtype> *in, std::complex<Dtype> *out, const int shape[4], const int permutation[4]);
+// #endif
     /**
      * @brief Converts the input values to complex.
      */
@@ -295,6 +287,8 @@ protected:
 
     size_t weight_alloc_size_in;
     size_t weight_alloc_size_out;
+    size_t alloc_size_input_real;
+    size_t alloc_size_input_complex;
     int num_of_threads_;
     bool fft_on_;
 };
