@@ -13,7 +13,7 @@
 #include <sys/time.h>
 #endif
 // #define WRITE_ARRAYS_T0_DISK
-#define WRITE_DEBUG
+// #define WRITE_DEBUG
 // #define WRITE_DEBUG_FW
 
 #define FFT_CONVOLUTION_KIND_POINTWISE_IPP 0
@@ -27,7 +27,11 @@
 namespace caffe {
 template<typename Dtype>
 ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  fft_cpu_free<Dtype>(this->fft_transposed_weights_);
+#else
   fft_cpu_free<Dtype>(fft_weights_out_complex_);
+#endif
 #ifdef WRITE_DEBUG
   LOG(ERROR) << "complex weights freed.";
 #endif
@@ -42,12 +46,12 @@ void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype> *> &bottom,
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Reshape(const vector<Blob<Dtype> *> &bottom, const vector<Blob<Dtype> *> &top) {
   ConvolutionLayer<Dtype>::Reshape(bottom, top);
-//  if (this->layer_param().name() == "conv1")
-//  {
-//    // do normal convolution...
-//    this->fft_on_ = false;
-//  }
-//  else
+  if (this->layer_param().name() == "conv1")
+  {
+    // do normal convolution...
+    this->fft_on_ = false;
+  }
+  else
   {
     if (!this->weights_converted_) {
       this->fft_set_up();
@@ -238,14 +242,24 @@ Forward_cpu_fft_single(const Blob<Dtype> *bottom, Blob<Dtype> *top) {
   double end_clock = cpu_time();
 #endif
 
-  this->write_arr_to_disk("conv_complex.txt", this->num_output_, this->fft_conv_result_complex_, true);
+#ifdef WRITE_ARRAYS_T0_DISK
+  std::stringstream ss;
+  ss << "conv_complex_simple_" << this->layer_param_.name() << ".txt";
+  const char *s = ss.str().c_str();
+  this->write_arr_to_disk(s, this->num_output_, this->fft_conv_result_complex_, true);
+#endif
 
 #ifdef WRITE_DEBUG
   LOG(ERROR) << "fft convolve took " << 1000.0 * (end_clock - begin_clock) << " ms.";
 #endif
 
+
   // free the memory used only once per forward call (the input memory was already used in convolve_fft)
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  fft_cpu_free<Dtype>(this->fft_transposed_bottom_);
+#else
   fft_cpu_free<Dtype>(this->fft_input_complex_);
+#endif
 
   size_t conv_result_real_size = this->fft_real_size_ * this->num_output_ * sizeof(Dtype);
 
@@ -275,11 +289,13 @@ Forward_cpu_fft_single(const Blob<Dtype> *bottom, Blob<Dtype> *top) {
 #ifdef WRITE_DEBUG
   end_clock = cpu_time();
 #endif
-//  // free the complex result, because it was already ifft-ed to real.
-//  fft_cpu_free<Dtype>(this->fft_summed_up_result_complex_);
 
   // free the complex result, because it was already ifft-ed to real.
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  fft_cpu_free<Dtype>(this->fft_transposed_result_);
+#else
   fft_cpu_free<Dtype>(this->fft_conv_result_complex_);
+#endif
 
 #ifdef WRITE_DEBUG
   LOG(ERROR) << "ifft took " << 1000.0 * (end_clock - begin_clock)<< " ms.";
@@ -334,6 +350,23 @@ void ConvolutionLayerFFT<Dtype>::convert_bottom(const Blob<Dtype> *bottom) {
 
 #ifdef WRITE_DEBUG
   LOG(ERROR) << "fft for bottom data took " << 1000.0 * (end_clock - begin_clock)<< " ms.";
+#endif
+
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  // transpose input if cgemm pt-wise product should be done
+#ifdef WRITE_DEBUG
+  begin_clock = cpu_time();
+#endif
+  this->fft_transposed_bottom_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->alloc_size_input_complex));
+  const int shape_bottom[] = {1, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
+  const int permutation_bottom[] = {2, 3, 0, 1};
+  this->permute_4d(this->fft_input_complex_, this->fft_transposed_bottom_, shape_bottom, permutation_bottom);
+
+  fft_cpu_free<Dtype>(this->fft_input_complex_);
+#ifdef WRITE_DEBUG
+  end_clock = cpu_time();
+  LOG(ERROR) << "bottom transpose took " << 1000.0 * (end_clock - begin_clock)<< " ms.";
+#endif
 #endif
 
 #ifdef WRITE_ARRAYS_T0_DISK
@@ -422,11 +455,27 @@ void ConvolutionLayerFFT<Dtype>::convert_weights_fft() {
 #endif
 
 #ifndef WRITE_ARRAYS_T0_DISK
-  fft_cpu_free<Dtype>(fft_weights_in_real_);
+  fft_cpu_free<Dtype>(this->fft_weights_in_real_);
 #endif
 
 #ifdef WRITE_DEBUG
   LOG(ERROR) << "fft for weight layer took " << 1000.0 * (end_clock - begin_clock) << " ms.";
+#endif
+
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  // transpose weights if cgemm pt-wise product should be done
+#ifdef WRITE_DEBUG
+  begin_clock = cpu_time();
+#endif
+  this->fft_transposed_weights_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(weight_alloc_size_out));
+  const int shape[] = {this->num_output_, this->channels_ / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1};
+  const int permutation[] = {2, 3, 0, 1};
+  this->permute_4d(this->fft_weights_out_complex_, this->fft_transposed_weights_, shape, permutation);
+  fft_cpu_free<Dtype>(fft_weights_out_complex_);
+#ifdef WRITE_DEBUG
+  end_clock = cpu_time();
+  LOG(ERROR) << "weight transpose took " << 1000.0 * (end_clock - begin_clock)<< " ms.";
+#endif
 #endif
 
   this->weights_converted_ = true;
@@ -585,18 +634,8 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
 
   // matrix width  is : H*W*C = this->fft_complex_size_ * this->channels_
   // matrix height is : N_O = this->num_output_
-  const int H = this->fft_height_;
-  const int W = (this->fft_width_ / 2) + 1;
-  const int G = this->group_;
-  this->fft_transposed_weights_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(weight_alloc_size_out));
-  const int shape[] = {this->num_output_, this->channels_ / this->group_, H, W};
-  const int permutation[] = {2, 3, 0, 1};
-  this->permute_4d(this->fft_weights_out_complex_, this->fft_transposed_weights_, shape, permutation);
 
-  this->fft_transposed_bottom_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->alloc_size_input_complex));
-  const int shape_bottom[] = {1, this->channels_, H, W};
-  const int permutation_bottom[] = {2, 3, 0, 1};
-  this->permute_4d(this->fft_input_complex_, this->fft_transposed_bottom_, shape_bottom, permutation_bottom);
+
 
   // alloc data for result
   size_t summed_result_size_complex = this->fft_complex_size_ * this->num_output_ * sizeof(std::complex<Dtype>);
@@ -604,17 +643,36 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(summed_result_size_complex));
 
   //                      num_output * channels / group = 96 * 3
-  const int weight_size = shape[0] * shape[1];
+  const int weight_size = this->num_output_ * (this->channels_ / this->group_);
 
   //                      num_images      * channels    =  1 * 3
-  const int bottom_size = shape_bottom[0] * shape_bottom[1];
+  const int bottom_size = 1 * this->channels_;
 
   //                      num_output * num_images       = 96 * 1
-  const int output_size = shape[0] * shape_bottom[0];
+  const int output_size = this->num_output_ * 1;
 
   std::complex<Dtype> one_complex(1., 0.);
   std::complex<Dtype> zero_complex(0., 0.);
 
+  const int H = this->fft_height_;
+  const int W = (this->fft_width_ / 2) + 1;
+  const int G = this->group_;
+
+  const int group_offset_weight = weight_size / G;
+  const int group_offset_input = bottom_size / G;
+  const int group_offset_output = output_size / G;
+
+  const int M = this->num_output_ / G;
+  const int N = 1;
+  const int K = this->channels_ / this->group_;
+
+  const std::complex<Dtype> **weight_arr = new const std::complex<Dtype> *[H*W*G];
+  const std::complex<Dtype> **input_arr = new const std::complex<Dtype> *[H*W*G];
+  std::complex<Dtype> **output_arr = new std::complex<Dtype> *[H*W*G];
+
+  int idx = 0;
+
+  //const int shape[] = {this->num_output_, this->channels_ / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1};
   for (int h = 0; h < H; ++h) {
     for (int w = 0; w < W; ++w) {
 
@@ -622,12 +680,26 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
       std::complex<Dtype> *input = this->fft_transposed_bottom_ + (h * W + w ) * bottom_size;
       std::complex<Dtype> *output = this->fft_transposed_result_ + (h * W + w ) * output_size;
 
-      caffe_cpu_gemm_complex<Dtype>(CblasNoTrans, CblasTrans, shape[0], shape_bottom[0], shape[1],
-                                    &one_complex, weight, input, &zero_complex, output);
+      for (int g = 0; g < G; ++g) {
+        weight_arr[idx] = weight + g * group_offset_weight;
+        input_arr[idx] = input + g * group_offset_input;
+        output_arr[idx] = output + g * group_offset_output;
+        idx++;
+//        std::complex<Dtype> *weight_g = weight + g * group_offset_weight;
+//        std::complex<Dtype> *input_g = input + g * group_offset_input;
+//        std::complex<Dtype> *output_g = output + g * group_offset_output;
+//
+//        caffe_cpu_gemm_complex<Dtype>(CblasNoTrans, CblasTrans, M, N, K,
+//                                      &one_complex, weight_g, input_g, &zero_complex, output_g);
+      }
     }
   }
+  caffe_cpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasTrans, M, N, K,
+                                      &one_complex, weight_arr, input_arr, &zero_complex, output_arr, H*W*G);
 
-
+  delete weight_arr;
+  delete input_arr;
+  delete output_arr;
 
   // result_dim = 256 x 129 x 96 x 1 ==> 1 x 96 x 256 x 129
   const int shape_result[] = {H, W, this->num_output_, 1};
@@ -640,12 +712,6 @@ void ConvolutionLayerFFT<Dtype>::convolve_fft() {
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::permute_4d(const std::complex<Dtype> *in, std::complex<Dtype> *out, const int shape[4], const int permutation[4]) {
-
-#ifdef WRITE_DEBUG
-  double begin_clock = cpu_time();
-#endif
-
-
   const int N = shape[0];              // 96
   const int K = shape[1];              // 3
   const int H = shape[2];              // 256
@@ -683,12 +749,6 @@ void ConvolutionLayerFFT<Dtype>::permute_4d(const std::complex<Dtype> *in, std::
       }
     }
   }
-
-#ifdef WRITE_DEBUG
-  double end_clock = cpu_time();
-  LOG(ERROR) << "weights transposed.... took:" << 1000.0 * (end_clock - begin_clock) << " ms.";
-  LOG(ERROR) << "weights transposed";
-#endif
 }
 
 
@@ -699,7 +759,7 @@ void ConvolutionLayerFFT<Dtype>::normalize_ifft_result(Blob<Dtype> *top) {
   Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
 
   int N = this->num_output_;
-  int K = (this->channels_ / this->group_);
+ //int K = (this->channels_ / this->group_);
 
 #ifdef _OPENMP
   #pragma omp parallel for

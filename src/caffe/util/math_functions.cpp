@@ -30,11 +30,6 @@ void caffe_cpu_gemm<double>(const CBLAS_TRANSPOSE TransA,
   cblas_dgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
       ldb, beta, C, N);
 }
-//
-//void caffe_cpu_gemm_complex(const CBLAS_TRANSPOSE TransA,
-//                            const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
-//                            const std::complex<Dtype> * alpha, const std::complex<Dtype> *A, std::complex<Dtype> *B, const std::complex<Dtype> *beta,
-//                            std::complex<Dtype> *C);
 
 template <>
 void caffe_cpu_gemm_complex<float>(const CBLAS_TRANSPOSE TransA,
@@ -56,8 +51,34 @@ void caffe_cpu_gemm_complex<double>(const CBLAS_TRANSPOSE TransA,
   int lda = (TransA == CblasNoTrans) ? K : M;
   int ldb = (TransB == CblasNoTrans) ? N : K;
 
-  cblas_zgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
+  cblas_cgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
               ldb, beta, C, N);
+}
+
+template <>
+void caffe_cpu_gemm_complex_batch<float>(const CBLAS_TRANSPOSE TransA,
+                                         const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                                         const std::complex<float> *alpha, const std::complex<float> **A_arr, const std::complex<float> **B_arr, const std::complex<float> *beta,
+                                         std::complex<float> **C_arr, int batch_size) {
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+
+  cblas_cgemm_batch(CblasRowMajor, &TransA, &TransB, &M, &N, &K, alpha, reinterpret_cast<const void **>(A_arr), &lda,
+                    reinterpret_cast<const void **>(B_arr), &ldb, beta, reinterpret_cast<void **>(C_arr), &N, 1,
+                    &batch_size);
+}
+
+template <>
+void caffe_cpu_gemm_complex_batch<double>(const CBLAS_TRANSPOSE TransA,
+                                         const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                                         const std::complex<double> *alpha, const std::complex<double> **A_arr, const std::complex<double> **B_arr, const std::complex<double> *beta,
+                                         std::complex<double> **C_arr, int batch_size) {
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+
+  cblas_zgemm_batch(CblasRowMajor, &TransA, &TransB, &M, &N, &K, alpha, reinterpret_cast<const void **>(A_arr), &lda,
+                    reinterpret_cast<const void **>(B_arr), &ldb, beta, reinterpret_cast<void **>(C_arr), &N, 1,
+                    &batch_size);
 }
 
 template <>

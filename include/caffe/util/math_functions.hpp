@@ -29,6 +29,12 @@ void caffe_cpu_gemm_complex(const CBLAS_TRANSPOSE TransA,
                             std::complex<Dtype> *C);
 
 template <typename Dtype>
+void caffe_cpu_gemm_complex_batch(const CBLAS_TRANSPOSE TransA,
+                                  const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                                  const std::complex<Dtype> *alpha, const std::complex<Dtype> **A_arr, const std::complex<Dtype> **B_arr, const std::complex<Dtype> *beta,
+                                  std::complex<Dtype> **C_arr, int batch_size);
+
+template <typename Dtype>
 void caffe_cpu_gemv(const CBLAS_TRANSPOSE TransA, const int M, const int N,
     const Dtype alpha, const Dtype* A, const Dtype* x, const Dtype beta,
     Dtype* y);
