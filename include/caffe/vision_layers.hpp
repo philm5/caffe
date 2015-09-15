@@ -182,115 +182,70 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
-public:
-    explicit ConvolutionLayerFFT(const LayerParameter& param) : ConvolutionLayer<Dtype>(param), weights_converted_(false) {}
+ public:
+  explicit ConvolutionLayerFFT(const LayerParameter& param)
+      : ConvolutionLayer<Dtype>(param) {}
+  virtual ~ConvolutionLayerFFT();
+ protected:
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+                           const vector<Blob<Dtype>*>& top);
 
-    virtual ~ConvolutionLayerFFT();
 
-    virtual inline const char* type() const { return "Convolution"; }    
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+                           const vector<Blob<Dtype>*>& top);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+                            const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
-    virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
-    
-    virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
-            const vector<Blob<Dtype>*>& top);
-        
-protected:            
-    /**
-     * @brief Performs fft-specific set-up for the layer...
-     */
-    virtual void fft_set_up();
-    
-    /**
-     * @brief begins the forward propagation...
-     */
-    virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
+  /**
+   * Generic FFT Stuff:
+   */
+  virtual void fft_set_up();
 
-    /**
-     * @brief begins the forward propagation with fft!
-     */
-    virtual void Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
-                                 const vector<Blob<Dtype>*>& top);
-    /**
-     * @brief begins the forward propagation with mtx mult!
-     */
-    virtual void Forward_cpu_normal(const vector<Blob<Dtype>*>& bottom,
-                                 const vector<Blob<Dtype>*>& top);
+  virtual void pad_real_blob(int shape[4], const Dtype *blob_data, Dtype *padded_data,
+                             int pad_h = 0, int pad_w = 0, bool flip = false);
 
-    /**
-     * @brief The fft task for a single input.
-     */
-    void Forward_cpu_fft_single(const Blob<Dtype> *bottom, Blob<Dtype> *top);
+  /**
+   * FFT CPU Stuff:
+   */
+  virtual void fft_set_up_cpu();
+  virtual void fft_bottom_cpu(const Blob<Dtype> *bottom, std::complex<Dtype> *ffted_bottom_data);
+  virtual void fft_convolve_cpu(std::complex<Dtype> *ffted_bottom_data, Blob<Dtype> *top);
+  virtual void fft_pointwise_multiply_cpu(const std::complex<Dtype> *ffted_bottom_data,
+                                          std::complex<Dtype> *ptwise_result);
+  virtual void fft_pointwise_multiply_ipp_cpu(const std::complex<Dtype> *ffted_bottom_data,
+                                              std::complex<Dtype> *ptwise_result);
+  virtual void fft_pointwise_multiply_gemm_cpu(const std::complex<Dtype> *ffted_bottom_data,
+                                               std::complex<Dtype> *ptwise_result);
+  virtual void fft_normalize_cpu(const std::complex<Dtype> *ptwise_result, Blob<Dtype> *top);
 
-    /**
-     * @brief Converts the weights via the fft. This is just done the first time. (Because the weights stay the same)
-     */
-    virtual void convert_weights_fft();
+  /**
+   * FFT GPU Stuff:
+   */
+  virtual void fft_set_up_gpu();
 
-    /**
-     * @brief Multiplies the converted fft values to do the convolution
-     */
-    virtual void convolve_fft();
+  /**
+   * FFT specific fields:
+   */
+  bool fft_on_ = true;
+  bool fft_initialized_;
+  bool fft_cpu_initialized_;
+  bool fft_gpu_initialized_;
+  bool weights_ffted_;
 
-    /**
-     * @brief Normalizes the ifft result and writes it to the top layer.
-     */
-    virtual void normalize_ifft_result(Blob<Dtype> *top);
+  int fft_height_;
+  int fft_width_;
+  int fft_complex_size_;
+  int fft_real_size_;
 
-    /**
-     * @brief Transforms blob data to the padded real data array for use in fft.
-     */
-    virtual void transform_blob_to_real_array(int N,
-                                              int K,
-                                              int H,
-                                              int W,
-                                              const Dtype *blob_data,
-                                              Dtype *padded_real_data,
-                                              int pad_h = 0,
-                                              int pad_w = 0,
-                                              bool flip = false);
-// #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
-  std::complex<Dtype> *fft_transposed_weights_;
-  std::complex<Dtype> *fft_transposed_bottom_;
-  std::complex<Dtype> *fft_transposed_result_;
-  virtual void permute_4d(const std::complex<Dtype> *in, std::complex<Dtype> *out, const int shape[4], const int permutation[4]);
-// #endif
-    /**
-     * @brief Converts the input values to complex.
-     */
-    virtual void convert_bottom(const Blob<Dtype> *bottom);
+  // Allocation sizes:
+  size_t padded_weights_real_size_;
+  size_t padded_weights_complex_size_;
 
-    virtual void write_arr_to_disk(const char* output_name, int size, void *arr, bool is_complex = false);
+  // Pointers to weight memory...
+  std::complex<Dtype> *fft_weights_;
 
-    // fft only variables...
-    int fft_width_, fft_height_;
-    int fft_real_size_, fft_complex_size_;
-    
-    Dtype *fft_weights_in_real_;
-    std::complex<Dtype> *fft_weights_out_complex_;
-
-    // plans are void* because they can be fftw_plan or fftwf_plan...
-    void *fft_weight_plan_;
-    void *fft_input_plan_;
-    void *ifft_plan_;
-    bool weights_converted_;
-
-    Dtype *fft_input_real_;
-    std::complex<Dtype> *fft_input_complex_;
-
-    // results
-    std::complex<Dtype> *fft_conv_result_complex_;
-    std::complex<Dtype> *fft_summed_up_result_complex_;
-    Dtype *fft_conv_result_real_;
-
-    void write_simple_arr_to_disk(const char *output_name, int size, const Dtype *arr);
-
-    size_t weight_alloc_size_in;
-    size_t weight_alloc_size_out;
-    size_t alloc_size_input_real;
-    size_t alloc_size_input_complex;
-    int num_of_threads_;
-    bool fft_on_;
+  int num_threads_;
+  int num_weights_;
 };
 
 /**
