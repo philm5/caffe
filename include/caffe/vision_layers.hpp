@@ -193,7 +193,11 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                            const vector<Blob<Dtype>*>& top);
-
+  virtual void Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
+                               const vector<Blob<Dtype>*>& top);
+  virtual void Forward_cpu_normal(const vector<Blob<Dtype>*>& bottom,
+                                  const vector<Blob<Dtype>*>& top);
+  virtual void Forward_cpu_fft_single(const Dtype *bottom, Dtype *top);
 
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                            const vector<Blob<Dtype>*>& top);
@@ -212,15 +216,15 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
    * FFT CPU Stuff:
    */
   virtual void fft_set_up_cpu();
-  virtual void fft_bottom_cpu(const Blob<Dtype> *bottom, std::complex<Dtype> *ffted_bottom_data);
-  virtual void fft_convolve_cpu(std::complex<Dtype> *ffted_bottom_data, Blob<Dtype> *top);
+  virtual void fft_bottom_cpu(const Dtype *bottom, std::complex<Dtype> *ffted_bottom_data);
+  virtual void fft_convolve_cpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top);
   virtual void fft_pointwise_multiply_cpu(const std::complex<Dtype> *ffted_bottom_data,
                                           std::complex<Dtype> *ptwise_result);
   virtual void fft_pointwise_multiply_ipp_cpu(const std::complex<Dtype> *ffted_bottom_data,
                                               std::complex<Dtype> *ptwise_result);
   virtual void fft_pointwise_multiply_gemm_cpu(const std::complex<Dtype> *ffted_bottom_data,
                                                std::complex<Dtype> *ptwise_result);
-  virtual void fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Blob<Dtype> *top);
+  virtual void fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
 
   /**
    * FFT GPU Stuff:
@@ -253,6 +257,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   int num_threads_;
   int num_weights_;
+  std::vector<int> bottom_shape_;
 };
 
 /**

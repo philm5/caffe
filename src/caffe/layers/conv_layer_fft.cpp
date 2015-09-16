@@ -18,21 +18,65 @@ ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  this->fft_set_up();
+  this->Forward_cpu_fft(bottom, top);
+}
 
-  // Allocate the complex memory for the bottom data
-  std::complex<Dtype> *ffted_bottom_data = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_bottom_complex_size_));
-  LOG(ERROR) << this->layer_param().name() << " 1.";
-  caffe_memset(this->padded_bottom_complex_size_, 0., ffted_bottom_data);
-  LOG(ERROR) << this->layer_param().name() << " 2.";
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_cpu_normal(const vector<Blob<Dtype>*>& bottom,
+                                                 const vector<Blob<Dtype>*>& top) {
 
-  this->fft_bottom_cpu(bottom[0], ffted_bottom_data);
+  const Dtype *weight = this->blobs_[0]->cpu_data();
 
-  LOG(ERROR) << this->layer_param().name() << " 9.";
+  for (int i = 0; i < bottom.size(); ++i) {
+    const Dtype *bottom_data = bottom[i]->cpu_data();
+    Dtype *top_data = top[i]->mutable_cpu_data();
 
-  this->fft_convolve_cpu(ffted_bottom_data, top[0]);
+    for (int n = 0; n < this->num_; ++n) {
+      this->forward_cpu_gemm(bottom_data + bottom[i]->offset(n), weight,
+                             top_data + top[i]->offset(n));
+      if (this->bias_term_) {
+        const Dtype *bias = this->blobs_[1]->cpu_data();
+        this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
+      }
+    }
+  }
+}
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
+                                                      const vector<Blob<Dtype>*>& top) {
+
+  this->bottom_shape_ = bottom[0]->shape();
+  for (int i = 0; i < bottom.size(); ++i) {
+    const Dtype* bottom_data = bottom[i]->cpu_data();
+    Dtype* top_data = top[i]->mutable_cpu_data();
+
+    for (int n = 0; n < this->num_; ++n) {
+      this->Forward_cpu_fft_single(bottom_data + bottom[i]->offset(n), top_data + top[i]->offset(n));
+      if (this->bias_term_) {
+        const Dtype* bias = this->blobs_[1]->cpu_data();
+        this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
+      }
+    }
+  }
 
 }
+
+  template <typename Dtype>
+  void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Dtype *bottom,
+                                                          Dtype *top) {
+
+    this->fft_set_up();
+
+    // Allocate the complex memory for the bottom data
+    std::complex<Dtype> *ffted_bottom_data = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_bottom_complex_size_));
+    caffe_memset(this->padded_bottom_complex_size_, 0., ffted_bottom_data);
+
+    this->fft_bottom_cpu(bottom, ffted_bottom_data);
+    this->fft_convolve_cpu(ffted_bottom_data, top);
+  }
+
+
 
 /**
  * Generic FFT Stuff:
@@ -154,15 +198,12 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_cpu() {
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Blob<Dtype> *bottom, std::complex<Dtype> *ffted_bottom_data) {
-  const Dtype *bottom_blob = bottom->cpu_data();
+void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Dtype *bottom, std::complex<Dtype> *ffted_bottom_data) {
+  const Dtype *bottom_blob = bottom;
   Dtype *padded_real_bottom = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_bottom_real_size_));
 
-  LOG(ERROR) << this->layer_param().name() << " 3.";
   // now pad the bottom data (it should have its origin in (h,w)), but don't flip it.1
-  this->pad_real_blob(bottom->shape(), bottom_blob, padded_real_bottom, this->pad_h_, this->pad_w_, false);
-
-  LOG(ERROR) << this->layer_param().name() << " 4.";
+  this->pad_real_blob(this->bottom_shape_, bottom_blob, padded_real_bottom, this->pad_h_, this->pad_w_, false);
 
   // Create FFT plan for the bottom data and execute it
   const void *fft_bottom_plan = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
@@ -172,10 +213,7 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Blob<Dtype> *bottom, std::
                                                                     ffted_bottom_data,
                                                                     FFTW_ESTIMATE);
 
-  LOG(ERROR) << this->layer_param().name() << " 5.";
   fft_cpu_execute_plan<Dtype>(fft_bottom_plan);
-
-  LOG(ERROR) << this->layer_param().name() << " 6.";
   fft_cpu_destroy_plan<Dtype>(fft_bottom_plan);
 
 
@@ -183,23 +221,17 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Blob<Dtype> *bottom, std::
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_convolve_cpu(std::complex<Dtype> *ffted_bottom_data, Blob<Dtype> *top) {
+void ConvolutionLayerFFT<Dtype>::fft_convolve_cpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top) {
   // alloc data for pointwise multiplication result (with channels added up) and set memory to 0
 
-  LOG(ERROR) << this->layer_param().name() << " 10." << this->convolution_result_complex_size_;
   std::complex<Dtype> *ptwise_result =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
-  LOG(ERROR) << this->layer_param().name() << " 11.";
   caffe_memset(this->convolution_result_complex_size_, 0., ptwise_result);
 
-  LOG(ERROR) << this->layer_param().name() << " 12.";
-  this->fft_pointwise_multiply_cpu(ffted_bottom_data, ptwise_result);
+  this->fft_pointwise_multiply_ipp_cpu(ffted_bottom_data, ptwise_result);
 
-  LOG(ERROR) << this->layer_param().name() << " 13.";
   // TODO: free transposed_bottom_data / #if...
   fft_cpu_free<Dtype>(ffted_bottom_data);
-  LOG(ERROR) << this->layer_param().name() << " 14.";
-
   this->fft_normalize_cpu(ptwise_result, top);
 
   // TODO:
@@ -310,7 +342,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu(const std::comp
 
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Blob<Dtype> *top) {
+void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Dtype *top_data) {
   // alloc data for real result
   Dtype *fft_convolution_result_real_ = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->convolution_result_real_size_));
 
@@ -331,7 +363,6 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::complex<Dtype> *ptwise_r
   fft_cpu_free<Dtype>(ptwise_result);
 
   // here the stride handling and FFT normalization is happening:
-  Dtype *top_data = top->mutable_cpu_data();
   Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
   int N = this->num_output_;
 
@@ -376,15 +407,11 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
   const int H = shape[2];
   const int W = shape[3];
 
-  LOG(ERROR) << "3.1.";
-
   int num_arr = N * K; // # of arrays (for weights it is num_weights [96 x 3]
   // for input data it is channels [ 1 x 3]
 
   // set everything to 0 before --> so not set weights are 0-padded :)
   caffe_memset(this->fft_real_size_ * num_arr * sizeof(Dtype), 0., padded_data);
-
-  LOG(ERROR) << "3.2.";
 #ifdef _OPENMP
 #pragma omp parallel for shared(padded_data, blob_data)
 #endif
