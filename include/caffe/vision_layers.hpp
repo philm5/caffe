@@ -184,7 +184,11 @@ template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
  public:
   explicit ConvolutionLayerFFT(const LayerParameter& param)
-      : ConvolutionLayer<Dtype>(param) {}
+      : ConvolutionLayer<Dtype>(param),
+        fft_initialized_(false),
+        fft_cpu_initialized_(false),
+        fft_gpu_initialized_(false),
+        fft_on_(true) {}
   virtual ~ConvolutionLayerFFT();
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
@@ -201,7 +205,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
    */
   virtual void fft_set_up();
 
-  virtual void pad_real_blob(int shape[4], const Dtype *blob_data, Dtype *padded_data,
+  virtual void pad_real_blob(std::vector<int> shape, const Dtype *blob_data, Dtype *padded_data,
                              int pad_h = 0, int pad_w = 0, bool flip = false);
 
   /**
@@ -216,7 +220,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
                                               std::complex<Dtype> *ptwise_result);
   virtual void fft_pointwise_multiply_gemm_cpu(const std::complex<Dtype> *ffted_bottom_data,
                                                std::complex<Dtype> *ptwise_result);
-  virtual void fft_normalize_cpu(const std::complex<Dtype> *ptwise_result, Blob<Dtype> *top);
+  virtual void fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Blob<Dtype> *top);
 
   /**
    * FFT GPU Stuff:
@@ -226,11 +230,10 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   /**
    * FFT specific fields:
    */
-  bool fft_on_ = true;
+  bool fft_on_;
   bool fft_initialized_;
   bool fft_cpu_initialized_;
   bool fft_gpu_initialized_;
-  bool weights_ffted_;
 
   int fft_height_;
   int fft_width_;
@@ -240,9 +243,13 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   // Allocation sizes:
   size_t padded_weights_real_size_;
   size_t padded_weights_complex_size_;
+  size_t padded_bottom_real_size_;
+  size_t padded_bottom_complex_size_;
+  size_t convolution_result_real_size_;
+  size_t convolution_result_complex_size_;
 
   // Pointers to weight memory...
-  std::complex<Dtype> *fft_weights_;
+  std::complex<Dtype> *ffted_weights_;
 
   int num_threads_;
   int num_weights_;
