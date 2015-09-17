@@ -216,7 +216,9 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
    * FFT CPU Stuff:
    */
   virtual void fft_set_up_cpu();
-  virtual void fft_bottom_cpu(const Dtype *bottom, std::complex<Dtype> *ffted_bottom_data);
+  virtual void fft_permute_4d_cpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
+                                  const int shape[4], const int permutation[4]);
+  virtual void fft_bottom_cpu(const Dtype *bottom, std::complex<Dtype> *&ffted_bottom_data);
   virtual void fft_convolve_cpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top);
   virtual void fft_pointwise_multiply_cpu(const std::complex<Dtype> *ffted_bottom_data,
                                           std::complex<Dtype> *ptwise_result);
