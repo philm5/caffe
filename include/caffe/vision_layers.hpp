@@ -188,7 +188,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
         fft_initialized_(false),
         fft_cpu_initialized_(false),
         fft_gpu_initialized_(false),
-        fft_on_(true) {}
+        fft_on_(false) {}
   virtual ~ConvolutionLayerFFT();
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,

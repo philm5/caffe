@@ -14,7 +14,7 @@ namespace caffe {
 #define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 1
 #define FFT_CONVOLUTION_KIND_CGEMM 2
 
-#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
+#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_CGEMM
 
 template <typename Dtype>
 ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
@@ -26,8 +26,8 @@ ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                                              const vector<Blob<Dtype>*>& top) {
-  if (this->layer_param().name() == "conv1") {
-    this->fft_on_ = false;
+  if (this->layer_param().name() == "conv2") {
+    this->fft_on_ = true;
   }
 
   if (this->fft_on_) {
@@ -522,9 +522,9 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::complex<Dtype> *ptwise_r
   Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
   int N = this->num_output_;
 
-#ifdef _OPENMP
-#pragma omp parallel for
-#endif
+//#ifdef _OPENMP
+//#pragma omp parallel for
+//#endif
   for (int n = 0; n < N; ++n) {
     int offset_res_real = n * this->fft_real_size_;
 
@@ -568,9 +568,9 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
 
   // set everything to 0 before --> so not set weights are 0-padded :)
   caffe_memset(this->fft_real_size_ * num_arr * sizeof(Dtype), 0., padded_data);
-#ifdef _OPENMP
-#pragma omp parallel for shared(padded_data, blob_data)
-#endif
+//#ifdef _OPENMP
+//#pragma omp parallel for
+//#endif
   for (int n = 0; n < N; n++) {
     for (int k = 0; k < K; k++) {
       for (int h = 0; h < H; h++) {
