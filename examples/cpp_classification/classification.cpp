@@ -45,11 +45,14 @@ Classifier::Classifier(const string& model_file,
                        const string& trained_file,
                        const string& mean_file,
                        const string& label_file) {
-#ifdef CPU_ONLY
+//#ifdef CPU_ONLY
+//  Caffe::set_mode(Caffe::CPU);
+//#else
+//  Caffe::set_mode(Caffe::GPU);
+//  Caffe::SetDevice(1);
+//#endif
+
   Caffe::set_mode(Caffe::CPU);
-#else
-  Caffe::set_mode(Caffe::GPU);
-#endif
 
   /* Load the network. */
   net_.reset(new Net<float>(model_file, TEST));

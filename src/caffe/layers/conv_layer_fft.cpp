@@ -154,8 +154,10 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
         this->fft_cpu_initialized_ = true;
         break;
       case Caffe::GPU:
+#ifndef CPU_ONLY
         this->fft_set_up_gpu();
         this->fft_gpu_initialized_ = true;
+#endif
         break;
     }
 
@@ -415,7 +417,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu(const std::compl
       const int input_offset = (k + group_idx * K) * this->fft_complex_size_;
       const int weight_offset = (n * K + k) * this->fft_complex_size_;
 
-      // pSrcDst[n ] = pSrcDst[n ] + pSrc1[n ] * pSrc2[n ], 0 ≤ n < len.
+      // pSrcDst[n ] = pSrcDst[n ] + pSrc1[n ] * pSrc2[n ], 0 ��� n < len.
       ipp_complex_add_product<Dtype>(bottom_complex + input_offset, weight_complex + weight_offset, ptwise_result + res_offset, this->fft_complex_size_);
     }
   }
@@ -603,14 +605,6 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
       }
     }
   }
-}
-
-/**
- * FFT GPU Stuff:
- */
-
-template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 }
 
 #ifdef CPU_ONLY
