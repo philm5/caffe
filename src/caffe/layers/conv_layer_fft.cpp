@@ -10,6 +10,8 @@
 
 namespace caffe {
 
+#define DBG_OUTPUT
+
 #define FFT_CONVOLUTION_KIND_POINTWISE_IPP 0
 #define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 1
 #define FFT_CONVOLUTION_KIND_CGEMM 2
@@ -66,11 +68,21 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
     Dtype* top_data = top[i]->mutable_cpu_data();
 
     for (int n = 0; n < this->num_; ++n) {
+#ifdef DBG_OUTPUT
+      start_time_ = cpu_time();
+#endif
       this->Forward_cpu_fft_single(bottom_data + bottom[i]->offset(n), top_data + top[i]->offset(n));
+#ifdef DBG_OUTPUT
+      double fft_time = cpu_time();
+#endif
       if (this->bias_term_) {
         const Dtype* bias = this->blobs_[1]->cpu_data();
         this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
       }
+#ifdef DBG_OUTPUT
+      double pass_time = cpu_time();
+      LOG(INFO) << "Forward_cpu_fft_single: " << (pass_time - start_time_) * 1000 << "ms.";
+#endif
     }
   }
 
@@ -80,14 +92,34 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
   void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Dtype *bottom,
                                                           Dtype *top) {
     this->fft_set_up();
+#ifdef DBG_OUTPUT
+    double set_up_time = cpu_time();
+#endif
 
     // Allocate the complex memory for the bottom data
     std::complex<Dtype> *ffted_bottom_data =
         reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_bottom_complex_size_));
     caffe_memset(this->padded_bottom_complex_size_, 0., ffted_bottom_data);
+#ifdef DBG_OUTPUT
+    double memset_bottom_time = cpu_time();
+#endif
 
     this->fft_bottom_cpu(bottom, ffted_bottom_data);
+#ifdef DBG_OUTPUT
+    double fft_bottom_cpu_time = cpu_time();
+#endif
     this->fft_convolve_cpu(ffted_bottom_data, top);
+#ifdef DBG_OUTPUT
+    double fft_convolve_cpu_time = cpu_time();
+#endif
+
+
+#ifdef DBG_OUTPUT
+    LOG(INFO) << "fft_set_up: " << (set_up_time - start_time_) * 1000 << "ms.";
+    LOG(INFO) << "caffe_memset bottom: " << (memset_bottom_time - set_up_time) * 1000 << "ms.";
+    LOG(INFO) << "fft_bottom_cpu: " << (fft_bottom_cpu_time - memset_bottom_time) * 1000 << "ms.";
+    LOG(INFO) << "fft_convolve_cpu: " << (fft_convolve_cpu_time - fft_bottom_cpu_time) * 1000 << "ms.";
+#endif
   }
 
 
@@ -346,10 +378,10 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu(const std::complex<D
   const std::complex<Dtype> *bottom_complex = ffted_bottom_data;
   std::complex<Dtype> *weight_complex = this->ffted_weights_;
 
-#ifdef _OPENMP
-#pragma omp parallel for \
-          private(n, k, h, w) shared(ptwise_result, bottom_complex, weight_complex)
-#endif
+//#ifdef _OPENMP
+//#pragma omp parallel for \
+//          private(n, k, h, w) shared(ptwise_result, bottom_complex, weight_complex)
+//#endif
   for (n = 0; n < N; ++n) {
     // check which group_ idx we are in
     const int group_idx = n / weight_group_size;
@@ -403,10 +435,10 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu(const std::compl
   const std::complex<Dtype> *bottom_complex = ffted_bottom_data;
   std::complex<Dtype> *weight_complex = this->ffted_weights_;
 
-#ifdef _OPENMP
-#pragma omp parallel for \
-          private(n, k) shared(bottom_complex, weight_complex, ptwise_result)
-#endif
+//#ifdef _OPENMP
+//#pragma omp parallel for \
+//          private(n, k) shared(bottom_complex, weight_complex, ptwise_result)
+//#endif
   for (n = 0; n < N; ++n) {
     const int res_offset = n * this->fft_complex_size_;
     // check which group_ idx we are in

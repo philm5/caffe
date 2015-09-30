@@ -1,4 +1,5 @@
 #include <caffe/caffe.hpp>
+#include <caffe/util/fft_util.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -7,6 +8,10 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+
+// args:
+// /home/harzigph/Documents/git/caffe/models/bvlc_reference_caffenet/deploy.prototxt /home/harzigph/Documents/git/caffe/models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel /home/harzigph/Documents/git/caffe/data/ilsvrc12/imagenet_mean.binaryproto /home/harzigph/Documents/git/caffe/data/ilsvrc12/synset_words.txt /home/harzigph/Documents/git/caffe/examples/images/cat.jpg
 
 using namespace caffe;  // NOLINT(build/namespaces)
 using std::string;
@@ -233,6 +238,8 @@ int main(int argc, char** argv) {
   }
 
   ::google::InitGoogleLogging(argv[0]);
+  //::google::Log
+  ::google::SetLogDestination(google::INFO, "/home/harzigph/log.txt");
 
   string model_file   = argv[1];
   string trained_file = argv[2];
@@ -255,4 +262,20 @@ int main(int argc, char** argv) {
     std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
               << p.first << "\"" << std::endl;
   }
+
+  std::vector<std::pair<std::vector<Prediction>, double> > cls_time;
+
+  // do 1000 classifications:
+  for (size_t i = 0; i < 1000; ++i) {
+    double start_time = cpu_time();
+    std::vector<Prediction> predictions = classifier.Classify(img);
+    double end_time = cpu_time();
+    cls_time.push_back(std::pair<std::vector<Prediction>, double>(predictions, (end_time-start_time) *1000));
+  }
+
+//  for (size_t i = 0; i < cls_time.size(); ++i) {
+//    std::pair<std::vector<Prediction>, double> pair = cls_time[i];
+//    std::cout << std::fixed << std::setprecision(4) << pair.first[0].second << " - \""
+//              << pair.first[0].first << "\" - " << pair.second << "" << std::endl;
+//  }
 }

@@ -253,6 +253,9 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void mem_info_gpu();
 #endif
+
+  double start_time_;
+
   /**
    * FFT specific fields:
    */
