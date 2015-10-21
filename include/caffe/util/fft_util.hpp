@@ -10,7 +10,9 @@
 
 #include <fftw3.h>
 #include <complex>
+#include <vector>
 #include "caffe/util/mkl_alternate.hpp"
+#include "caffe/util/math_functions.hpp"
 #include <ipps.h>
 
 namespace caffe {
@@ -64,8 +66,15 @@ void fft_cpu_destroy_plan(const void *plan_handle);
 bool check_power_of_2(unsigned int n);
 
 unsigned int next_power_of_2(unsigned int n);
+
+
+#ifndef CPU_ONLY
+template<typename Dtype>
+void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int fft_width,
+                       const Dtype *blob_data, Dtype *padded_data, const int pad_h,
+                       const int pad_w, const bool flip);
+#endif
+
 }
-
-
 #endif	/* FFT_UTIL_HPP */
 

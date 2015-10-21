@@ -225,9 +225,12 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_cpu() {
   shape.push_back(this->kernel_h_);
   shape.push_back(this->kernel_w_);
 
-  // weights do not have to be padded. But the weights have to be flipped, since the convolution is actually a
+  // weights do not have to be padded (only 0-padded). But the weights have to be flipped, since the convolution is actually a
   // cross-correlation.
   this->pad_real_blob(shape, weight_data, padded_real_weights, 0, 0, true);
+
+
+  this->write_arr_to_disk("/home/harzigph/pad_cpu.txt", this->num_output_ * (this->channels_ / this->group_), padded_real_weights, false);
 
   // The plan for fft of the weights
   // TODO: Do inplace fft to save memory???
@@ -449,7 +452,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu(const std::compl
       const int input_offset = (k + group_idx * K) * this->fft_complex_size_;
       const int weight_offset = (n * K + k) * this->fft_complex_size_;
 
-      // pSrcDst[n ] = pSrcDst[n ] + pSrc1[n ] * pSrc2[n ], 0 ��� n < len.
+      // pSrcDst[n ] = pSrcDst[n ] + pSrc1[n ] * pSrc2[n ], 0 ��������� n < len.
       ipp_complex_add_product<Dtype>(bottom_complex + input_offset, weight_complex + weight_offset, ptwise_result + res_offset, this->fft_complex_size_);
     }
   }
@@ -619,7 +622,7 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
           //   0 0 0 0 0
           //   0 0 0 0 0
 
-          const int idx_weight_real = offset_weight_real + (h + pad_h) * this->fft_height_ + (w + pad_w);
+          const int idx_weight_real = offset_weight_real + (h + pad_h) * this->fft_width_ + (w + pad_w);
           // copy each weight into the fft_weights_in_real_
           // get ptr to blob data. indexing see: http://caffe.berkeleyvision.org/tutorial/net_layer_blob.html
           // Blob memory is row-major in layout, so the last / rightmost dimension changes fastest. For example,
@@ -630,13 +633,38 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
           // a cross-correlation according to: https://github.com/BVLC/caffe/issues/2513
           const int h_idx = flip ? H - (h + 1) : h;
           const int w_idx = flip ? W - (w + 1) : w;
-          int idx_weight_in_blob = ((n * K + k) * H + h_idx) * W + w_idx;
+          const int idx_weight_in_blob = ((n * K + k) * H + h_idx) * W + w_idx;
 
           padded_data[idx_weight_real] = blob_data[idx_weight_in_blob];
         }
       }
     }
   }
+}
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::write_arr_to_disk(const char *output_name, size_t size, void *arr, bool is_complex) {
+  std::ofstream fout(output_name); //opening an output stream for file test.txt
+  if (fout.is_open()) {
+    //file opened successfully so we are here
+    std::cout << "File Opened successfully!!!. Writing data from array to file" << std::endl;
+
+    size_t size_multiplier = is_complex ? this->fft_complex_size_ : this->fft_real_size_;
+    size_t length = size_multiplier * size;
+    for (int i = 0; i < length; i++) {
+      if (is_complex) {
+        std::complex<Dtype> *arr_conv = reinterpret_cast<std::complex<Dtype> *>(arr);
+        fout << arr_conv[i].real() << " + " << arr_conv[i].imag() << " * i\n";
+      }
+      else {
+        Dtype *arr_conv = reinterpret_cast<Dtype *>(arr);
+        fout << *(arr_conv + i) << "\n";
+      }
+    }
+    std::cout << "Array data successfully saved into the file " << output_name << std::endl;
+  }
+
+  fout.close();
 }
 
 #ifdef CPU_ONLY

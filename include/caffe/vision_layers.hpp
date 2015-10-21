@@ -231,6 +231,12 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
 
   /**
+   * Helper stuff
+   */
+
+  virtual void write_arr_to_disk(const char* output_name, size_t size, void *arr, bool is_complex = false);
+
+  /**
    * FFT GPU Stuff:
    */
 

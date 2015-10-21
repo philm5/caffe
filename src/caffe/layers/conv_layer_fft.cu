@@ -5,6 +5,7 @@
 #include "caffe/util/im2col.hpp"
 #include "caffe/util/math_functions.hpp"
 #include "caffe/vision_layers.hpp"
+#include "caffe/util/fft_util.hpp"
 
 // CUDA Header includes
 #include <cuda.h>
@@ -35,10 +36,10 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(
     for (int n = 0; n < this->num_; ++n) {
       this->Forward_gpu_fft_single(bottom_data + bottom[i]->offset(n),
                                    top_data + top[i]->offset(n));
-      if (this->bias_term_) {
-        const Dtype* bias = this->blobs_[1]->cpu_data();
-        this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
-      }
+//      if (this->bias_term_) {
+//        const Dtype* bias = this->blobs_[1]->cpu_data();
+//        this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
+//      }
     }
   }
 }
@@ -94,9 +95,29 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 
   this->mem_info_gpu();
 
-  Dtype *padded_real_weights;
+  Dtype *padded_real_weights_gpu;
 
-  CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(padded_real_weights), this->padded_weights_real_size_));
+  CUDA_CHECK(cudaMalloc(&padded_real_weights_gpu, this->padded_weights_real_size_));
+  const Dtype *weight_data = this->blobs_[0]->gpu_data();
+	vector<int> shape;
+	shape.push_back(this->num_output_);
+	shape.push_back((this->channels_ / this->group_));
+	shape.push_back(this->kernel_h_);
+	shape.push_back(this->kernel_w_);
+
+  // weights do not have to be padded (only 0-padded). But the weights have to be flipped, since the convolution is actually a
+  // cross-correlation.
+
+	pad_real_blob_gpu<Dtype>(shape, this->fft_height_, this->fft_width_, weight_data, padded_real_weights_gpu,
+	                         0, 0, true);
+
+	// copy to cpu to test
+	Dtype *padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(
+	    this->padded_weights_real_size_));
+	CUDA_CHECK(cudaMemcpy(padded_real_weights, padded_real_weights_gpu, this->padded_weights_real_size_, cudaMemcpyDeviceToHost));
+
+
+	this->write_arr_to_disk("/home/harzigph/pad_gpu.txt", this->num_output_ * (this->channels_ / this->group_), padded_real_weights, false);
 
   this->mem_info_gpu();
 
