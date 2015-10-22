@@ -57,7 +57,7 @@ Classifier::Classifier(const string& model_file,
 //  Caffe::SetDevice(1);
 //#endif
 
-  Caffe::set_mode(Caffe::GPU);
+  Caffe::set_mode(Caffe::CPU);
 
   /* Load the network. */
   net_.reset(new Net<float>(model_file, TEST));

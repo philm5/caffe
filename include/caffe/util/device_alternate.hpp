@@ -40,6 +40,8 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
 #include "caffe/util/cudnn.hpp"
 #endif
 
+#include <cufft.h>
+
 //
 // CUDA macros
 //
@@ -66,6 +68,13 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
       << caffe::curandGetErrorString(status); \
   } while (0)
 
+#define CUFFT_CHECK(condition) \
+  do { \
+    cufftResult_t status = condition; \
+    CHECK_EQ(status, CUFFT_SUCCESS) << " " \
+      << caffe::cufftGetErrorString(status); \
+  } while (0)
+
 // CUDA: grid stride looping
 #define CUDA_KERNEL_LOOP(i, n) \
   for (int i = blockIdx.x * blockDim.x + threadIdx.x; \
@@ -80,6 +89,7 @@ namespace caffe {
 // CUDA: library error reporting.
 const char* cublasGetErrorString(cublasStatus_t error);
 const char* curandGetErrorString(curandStatus_t error);
+const char* cufftGetErrorString(cufftResult_t error);
 
 // CUDA: thread number configuration.
 // Use 1024 threads per block, which requires cuda sm_2x or above,

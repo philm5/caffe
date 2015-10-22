@@ -111,30 +111,28 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 	pad_real_blob_gpu<Dtype>(shape, this->fft_height_, this->fft_width_, weight_data, padded_real_weights_gpu,
 	                         0, 0, true);
 
-	// copy to cpu to test
-	Dtype *padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(
-	    this->padded_weights_real_size_));
-	CUDA_CHECK(cudaMemcpy(padded_real_weights, padded_real_weights_gpu, this->padded_weights_real_size_, cudaMemcpyDeviceToHost));
+	this->mem_info_gpu();
+	CUDA_CHECK(cudaMalloc(&this->ffted_weights_, this->padded_weights_complex_size_));
+
+	cufftHandle plan;
+	fft_gpu_plan_many_dft_r2c_2d<Dtype>(&plan, this->fft_height_, this->fft_width_, this->num_weights_);
+	caffe_gpu_memset(this->padded_weights_complex_size_, 0., this->ffted_weights_);
+
+	fft_gpu_execute_plan_r2c(plan, padded_real_weights_gpu, this->ffted_weights_);
+	this->mem_info_gpu();
 
 
-	this->write_arr_to_disk("/home/harzigph/pad_gpu.txt", this->num_output_ * (this->channels_ / this->group_), padded_real_weights, false);
+
+  // copy to cpu to test
+  std::complex<Dtype> *ffted_complex = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_weights_complex_size_));
+  CUDA_CHECK(cudaMemcpy(ffted_complex, this->ffted_weights_, this->padded_weights_complex_size_, cudaMemcpyDeviceToHost));
+
+
+  this->write_arr_to_disk("/home/harzigph/fft_gpu.txt", this->num_output_ * (this->channels_ / this->group_), ffted_complex, true);
 
   this->mem_info_gpu();
 
-//  Dtype *padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(
-//      this->padded_weights_real_size_));
-//
-//  // get the pointer to the weights
-//  const Dtype *weight_data = this->blobs_[0]->cpu_data();
-//  vector<int> shape;
-//  shape.push_back(this->num_output_);
-//  shape.push_back((this->channels_ / this->group_));
-//  shape.push_back(this->kernel_h_);
-//  shape.push_back(this->kernel_w_);
-//
-//  // weights do not have to be padded. But the weights have to be flipped, since the convolution is actually a
-//  // cross-correlation.
-//  this->pad_real_blob(shape, weight_data, padded_real_weights, 0, 0, true);
+
 //
 //  // The plan for fft of the weights
 //  // TODO: Do inplace fft to save memory???

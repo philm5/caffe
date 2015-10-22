@@ -6,6 +6,7 @@
 
 #include "caffe/common.hpp"
 #include "caffe/util/fft_util.hpp"
+#include <cufft.h>
 
 namespace caffe {
 template <typename Dtype>
@@ -100,4 +101,60 @@ template void pad_real_blob_gpu<float>(std::vector<int> shape, const int fft_hei
 template void pad_real_blob_gpu<double>(std::vector<int> shape, const int fft_height, const int fft_width,
                                         const double *blob_data, double *padded_data, const int pad_h,
                                         const int pad_w, const bool flip);
+
+
+template<>
+void fft_gpu_plan_many_dft_r2c_2d<float>(cufftHandle *plan, int n0,
+                                         int n1,
+                                         int how_many) {
+  int rank = 2;
+  int n[] = {n0, n1};
+  int idist = n0 * n1; /* = 256*256, the distance in memory
+                                          between the first element
+                                          of the first array and the
+                                          first element of the second array */
+  int istride = 1; /* array is contiguous in memory */
+  int *inembed = NULL;
+
+  // out
+  int odist = n0 * (n1 / 2 + 1);
+  int ostride = 1;
+  int *onembed = NULL;
+
+  CUFFT_CHECK(cufftCreate(plan));
+  CUFFT_CHECK(cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed, ostride, odist, CUFFT_R2C, how_many));
+}
+
+template<>
+void fft_gpu_plan_many_dft_r2c_2d<double>(cufftHandle *plan, int n0,
+                                          int n1,
+                                          int how_many) {
+  int rank = 2;
+  int n[] = {n0, n1};
+  int idist = n0 * n1; /* = 256*256, the distance in memory
+                                          between the first element
+                                          of the first array and the
+                                          first element of the second array */
+  int istride = 1; /* array is contiguous in memory */
+  int *inembed = NULL;
+
+  // out
+  int odist = n0 * (n1 / 2 + 1);
+  int ostride = 1;
+  int *onembed = NULL;
+
+  CUFFT_CHECK(cufftCreate(plan));
+  CUFFT_CHECK(cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed, ostride, odist, CUFFT_D2Z, how_many));
+}
+
+template<>
+void fft_gpu_execute_plan_r2c<float>(cufftHandle plan, float *in, std::complex<float> *out) {
+  cufftExecR2C(plan, in, reinterpret_cast<cufftComplex *>(out));
+}
+
+template<>
+void fft_gpu_execute_plan_r2c<double>(cufftHandle plan, double *in, std::complex<double> *out) {
+  cufftExecD2Z(plan, in, reinterpret_cast<cufftDoubleComplex *>(out));
+}
+
 }

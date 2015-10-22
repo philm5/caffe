@@ -249,6 +249,10 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_cpu() {
   // Do the FFT of the padded weights:
   fft_cpu_execute_plan<Dtype>(fft_weight_plan);
 
+
+
+  this->write_arr_to_disk("/home/harzigph/fft_cpu.txt", this->num_output_ * (this->channels_ / this->group_), this->ffted_weights_, true);
+
   // Destroy the weight plan:
   fft_cpu_destroy_plan<Dtype>(fft_weight_plan);
   // free the padded real weights. There is no need for them anymore. Also free weights in blobs_[0] ???
