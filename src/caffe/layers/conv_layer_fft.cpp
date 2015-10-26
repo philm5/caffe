@@ -361,10 +361,8 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_cpu(std::complex<Dtype> *ffted_bot
   this->fft_pointwise_multiply_gemm_cpu(ffted_bottom_data, ptwise_result);
 #endif
 
-  // TODO: free transposed_bottom_data / #if...
   fft_cpu_free<Dtype>(ffted_bottom_data);
   this->fft_normalize_cpu(ptwise_result, top);
-
 }
 
 template <typename Dtype>
