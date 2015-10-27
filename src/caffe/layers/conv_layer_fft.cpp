@@ -16,7 +16,7 @@ namespace caffe {
 #define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 1
 #define FFT_CONVOLUTION_KIND_CGEMM 2
 
-#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_CGEMM
+#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
 
 template <typename Dtype>
 ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
@@ -105,6 +105,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
 #endif
 
     this->fft_bottom_cpu(bottom, ffted_bottom_data);
+    this->write_arr_to_disk("/home/harzigph/bottom_cpu.txt", this->channels_, ffted_bottom_data, true);
 #ifdef DBG_OUTPUT
     double fft_bottom_cpu_time = cpu_time();
 #endif
@@ -425,6 +426,9 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu(const std::complex<D
       }
     }
   }
+
+
+  //this->write_arr_to_disk("/home/harzigph/res_cpu.txt", this->num_output_, ptwise_result, true);
 }
 
 template <typename Dtype>

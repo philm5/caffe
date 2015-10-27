@@ -21,7 +21,10 @@ __global__ void pad_real_blob_gpu_kernel(const int K, const int H, const int W, 
   // calculate the channel index. The blockIdx.y is usually zero. Because CUDA_THREADS = 512 > 48 = ch/gr. (48 / 512) + 1 = 1.
   const int k = blockIdx.y * blockDim.x + threadIdx.x;
 
+
+
   if (k < K) {
+
     // get offset with channels and the idx of the output.
     const int offset_weight_real = (n * K + k) * fft_real_size;
     const int offset_blob_real = (n * K + k) * H * W;
@@ -77,6 +80,8 @@ __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K
 
 
   if (k < K) {
+
+    // printf("<<<%i, %i>>>| n: %i k: %i K: %i\n", blockIdx.x, threadIdx.x, n, k, K);
     // check which group_ idx we are in
     const int group_idx = n / weight_group_size;
 
@@ -100,23 +105,69 @@ __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K
         const int weight_idx = (weight_offset * H + h) * W + w; // 4 ops
         const cufftComplex weight = weight_complex[weight_idx];
 
-
-        const int res_idx = (n * H + h) * W + w; // 4 ops; before with channels: ((n * K + k) * H + h) * W + w;
-        cufftComplex dst = ptwise_result[res_idx];
-
         // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
         // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
-        float a = input.x;
-        float b = input.y;
-        float c = weight.x;
-        float d = weight.y;
+        float a = weight.x;
+        float b = weight.y;
+        float c = input.x;
+        float d = input.y;
 
-        dst.x += a * c - b * d;
-        dst.y += b * c + a * d;
+        const int res_idx = (n * H + h) * W + w; // 4 ops; before with channels: ((n * K + k) * H + h) * W + w;
+        atomicAdd(&(ptwise_result[res_idx].x), a * c - b * d);
+        atomicAdd(&(ptwise_result[res_idx].y), b * c + a * d);
       }
     }
   }
 }
+
+
+template <typename Dtype>
+__global__ void fft_util_normalize_gpu_kernel(const int N, const int H, const int W, const int kernel_h,
+                                              const int kernel_w, const int stride_h, const int stride_w,
+                                              float normalize_factor, int fft_height, int fft_width,
+                                              const Dtype *fft_convolution_result_real, Dtype *top_data) {
+
+  // blockDim (256, 1) ----- (num_output_, (height_out) / CUDA_NUM_THREADS)
+  //                              x                y
+  const int n = blockIdx.x;
+
+  // calculate the height index. The blockIdx.y is usually zero. Because CUDA_THREADS = 512 > 27 = ch/gr. (27 / 512) + 1 = 1.
+  const int h = blockIdx.y * blockDim.x + threadIdx.x;
+
+  if (h < H) {
+    const int fft_real_size = fft_height * fft_width;
+    const int offset_res_real = n * fft_real_size;
+    // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
+    // idx (kernel_h_ - 1). The stride times the idx of the output pixel will be added onto this.
+    const int h_idx = (kernel_h - 1) + h * stride_h;
+
+    for (int w = 0; w < W; ++w) // =55 in 1st layer
+    {
+      // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
+      // idx (kernel_w_ - 1). The stride times the idx of the output pixel will be added onto this.
+      const int w_idx = (kernel_w - 1) + w * stride_w;
+      //((n * K + k) * H + h) * W + w;
+      const int top_data_idx = (n * H + h) * W + w;
+
+      // the index in the data of the convolution result array (the real one)
+      const int res_data_idx = offset_res_real + h_idx * fft_width + w_idx;
+
+      // normalize fft and sum up everything from the input channels...
+      top_data[top_data_idx] = fft_convolution_result_real[res_data_idx] * normalize_factor;
+    }
+  }
+}
+
+template __global__ void fft_util_normalize_gpu_kernel<float>(const int N, const int H, const int W, const int kernel_h,
+                                                              const int kernel_w, const int stride_h, const int stride_w,
+                                                              float normalize_factor, int fft_height, int fft_width,
+                                                              const float *fft_convolution_result_real, float *top_data);
+
+template __global__ void fft_util_normalize_gpu_kernel<double>(const int N, const int H, const int W, const int kernel_h,
+                                                               const int kernel_w, const int stride_h, const int stride_w,
+                                                               float normalize_factor, int fft_height, int fft_width,
+                                                               const double *fft_convolution_result_real, double *top_data);
+
 
 //// --- end of kernel methods ---
 
@@ -147,7 +198,7 @@ void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int f
   pad_real_blob_gpu_kernel<Dtype><<<block_num, thread_num>>>(
       K, H, W, fft_height, fft_width, fft_real_size,
       blob_data, padded_data, pad_h, pad_w, flip);
-
+  CUDA_POST_KERNEL_CHECK;
 }
 
 template void pad_real_blob_gpu<float>(std::vector<int> shape, const int fft_height, const int fft_width,
@@ -173,13 +224,13 @@ void fft_util_pointwise_multiply_gpu<float>(std::vector<int> shape, int group, c
   dim3 block_num(N, (K / CAFFE_CUDA_NUM_THREADS) + 1);
   int thread_num = CAFFE_CUDA_NUM_THREADS;
 
-  const cufftComplex* ffted_bottom_data_cuda  = reinterpret_cast<const cufftComplex *> (ffted_bottom_data);
-  const cufftComplex* weight_complex_cuda = reinterpret_cast<const cufftComplex *> (weight_complex);
-  cufftComplex* ptwise_result_cuda = reinterpret_cast<cufftComplex *> (ptwise_result);
+  const cufftComplex *ffted_bottom_data_cuda  = reinterpret_cast<const cufftComplex *> (ffted_bottom_data);
+  const cufftComplex *weight_complex_cuda = reinterpret_cast<const cufftComplex *> (weight_complex);
+  cufftComplex *ptwise_result_cuda = reinterpret_cast<cufftComplex *> (ptwise_result);
 
   fft_pointwise_multiply_float_gpu_kernel<<<block_num, thread_num>>>
       (N, K, H, W, weight_group_size, ffted_bottom_data_cuda, weight_complex_cuda, ptwise_result_cuda);
-
+  CUDA_POST_KERNEL_CHECK;
 }
 
 template <>
@@ -199,6 +250,38 @@ void fft_util_pointwise_multiply_gpu<double>(std::vector<int> shape, int group, 
 
 
 }
+
+template <typename Dtype>
+void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,
+                            const int kernel_w, const int stride_h, const int stride_w,
+                            float normalize_factor, int fft_height, int fft_width,
+                            const Dtype *conv_result_real, Dtype *top_data) {
+
+  // shape[0] is 0 here, because there is only one output image.
+  const int N = shape[1];
+  const int H = shape[2];
+  const int W = shape[3];
+
+  dim3 block_num(N, (H / CAFFE_CUDA_NUM_THREADS) + 1);
+  int thread_num = CAFFE_CUDA_NUM_THREADS;
+
+
+  fft_util_normalize_gpu_kernel<<<block_num, thread_num>>>
+      (N, H, W, kernel_h, kernel_w, stride_h, stride_w,
+       normalize_factor, fft_height, fft_width,
+       conv_result_real, top_data);
+  CUDA_POST_KERNEL_CHECK;
+}
+
+template void fft_util_normalize_gpu<float>(std::vector<int> shape, const int kernel_h,
+                                            const int kernel_w, const int stride_h, const int stride_w,
+                                            float normalize_factor, int fft_height, int fft_width,
+                                            const float *conv_result_real, float *top_data);
+
+template void fft_util_normalize_gpu<double>(std::vector<int> shape, const int kernel_h,
+                                            const int kernel_w, const int stride_h, const int stride_w,
+                                            float normalize_factor, int fft_height, int fft_width,
+                                            const double *conv_result_real, double *top_data);
 
 // --- cufft calls ----
 
@@ -248,13 +331,69 @@ void fft_gpu_plan_many_dft_r2c_2d<double>(cufftHandle *plan, int n0,
 }
 
 template<>
+void fft_gpu_plan_many_dft_c2r_2d<float>(cufftHandle *plan, int n0,
+                                         int n1,
+                                         int how_many) {
+
+  int rank = 2;
+  int n[] = {n0, n1};
+  int idist = n0 * (n1 / 2 + 1); /* = 256*129, the distance in memory
+                                          between the first element
+                                          of the first array and the
+                                          first element of the second array */
+  int istride = 1; /* array is contiguous in memory */
+  int *inembed = NULL;
+
+  // out
+  int odist = n0 * n1;
+  int ostride = 1;
+  int *onembed = NULL;
+
+  CUFFT_CHECK(cufftCreate(plan));
+  CUFFT_CHECK(cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed, ostride, odist, CUFFT_C2R, how_many));
+}
+
+template<>
+void fft_gpu_plan_many_dft_c2r_2d<double>(cufftHandle *plan, int n0,
+                                         int n1,
+                                         int how_many) {
+
+  int rank = 2;
+  int n[] = {n0, n1};
+  int idist = n0 * (n1 / 2 + 1); /* = 256*129, the distance in memory
+                                          between the first element
+                                          of the first array and the
+                                          first element of the second array */
+  int istride = 1; /* array is contiguous in memory */
+  int *inembed = NULL;
+
+  // out
+  int odist = n0 * n1;
+  int ostride = 1;
+  int *onembed = NULL;
+
+  CUFFT_CHECK(cufftCreate(plan));
+  CUFFT_CHECK(cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed, ostride, odist, CUFFT_Z2D, how_many));
+}
+
+template<>
 void fft_gpu_execute_plan_r2c<float>(cufftHandle plan, float *in, std::complex<float> *out) {
-  cufftExecR2C(plan, in, reinterpret_cast<cufftComplex *>(out));
+  CUFFT_CHECK(cufftExecR2C(plan, in, reinterpret_cast<cufftComplex *>(out)));
 }
 
 template<>
 void fft_gpu_execute_plan_r2c<double>(cufftHandle plan, double *in, std::complex<double> *out) {
-  cufftExecD2Z(plan, in, reinterpret_cast<cufftDoubleComplex *>(out));
+  CUFFT_CHECK(cufftExecD2Z(plan, in, reinterpret_cast<cufftDoubleComplex *>(out)));
+}
+
+template<>
+void fft_gpu_execute_plan_c2r<float>(cufftHandle plan, std::complex<float> *in, float *out) {
+  CUFFT_CHECK(cufftExecC2R(plan, reinterpret_cast<cufftComplex *>(in), out));
+}
+
+template<>
+void fft_gpu_execute_plan_c2r<double>(cufftHandle plan, std::complex<double> *in, double *out) {
+  CUFFT_CHECK(cufftExecZ2D(plan, reinterpret_cast<cufftDoubleComplex *>(in), out));
 }
 
 void fft_gpu_destroy_plan(cufftHandle plan_handle) {

@@ -71,18 +71,16 @@ unsigned int next_power_of_2(unsigned int n);
 #ifndef CPU_ONLY
 
 template<typename Dtype>
-void *fft_gpu_malloc(size_t n);
-
-template<typename Dtype>
-void fft_gpu_free(void *ptr);
-
-template<typename Dtype>
 void fft_gpu_plan_many_dft_r2c_2d(cufftHandle *plan, int n0, int n1, int how_many);
 
+template<typename Dtype>
+void fft_gpu_plan_many_dft_c2r_2d(cufftHandle *plan, int n0, int n1, int how_many);
 
 template<typename Dtype>
 void fft_gpu_execute_plan_r2c(cufftHandle plan, Dtype *in, std::complex<Dtype> *out);
 
+template<typename Dtype>
+void fft_gpu_execute_plan_c2r(cufftHandle plan, std::complex<Dtype> *in, Dtype *out);
 
 void fft_gpu_destroy_plan(cufftHandle plan_handle);
 
@@ -95,6 +93,12 @@ void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int f
 template<typename Dtype>
 void fft_util_pointwise_multiply_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *ffted_bottom_data,
                                      const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result);
+
+template <typename Dtype>
+void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,
+                            const int kernel_w, const int stride_h, const int stride_w,
+                            float normalize_factor, int fft_height, int fft_width,
+                            const Dtype *conv_result_real, Dtype *top_data);
 #endif
 
 }

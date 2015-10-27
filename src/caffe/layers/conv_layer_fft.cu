@@ -36,10 +36,10 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(
     for (int n = 0; n < this->num_; ++n) {
       this->Forward_gpu_fft_single(bottom_data + bottom[i]->offset(n),
                                    top_data + top[i]->offset(n));
-//      if (this->bias_term_) {
-//        const Dtype* bias = this->blobs_[1]->cpu_data();
-//        this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
-//      }
+      if (this->bias_term_) {
+        const Dtype* bias = this->blobs_[1]->gpu_data();
+        this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
+      }
     }
   }
 }
@@ -75,8 +75,6 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft_single(const Dtype *bottom,
     std::complex<Dtype> *ffted_bottom_data;
     CUDA_CHECK(cudaMalloc(&ffted_bottom_data, this->padded_bottom_complex_size_));
     caffe_gpu_memset(this->padded_bottom_complex_size_, 0., ffted_bottom_data);
-
-    this->mem_info_gpu();
 
 #ifdef DBG_OUTPUT
     double memset_bottom_time = cpu_time();
@@ -162,15 +160,11 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom, std::comple
   // now pad the bottom data (it should have its origin in (h,w)), but don't flip it.
   pad_real_blob_gpu(this->bottom_shape_, this->fft_height_, this->fft_width_, bottom_blob, padded_real_bottom, this->pad_h_, this->pad_w_, false);
 
-  this->mem_info_gpu();
-
   // Create FFT plan for the bottom data and execute it
   cufftHandle fft_bottom_plan;
   fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_bottom_plan, this->fft_height_, fft_width_, this->channels_);
   fft_gpu_execute_plan_r2c<Dtype>(fft_bottom_plan, padded_real_bottom, ffted_bottom_data);
   fft_gpu_destroy_plan(fft_bottom_plan);
-
-  this->mem_info_gpu();
 
 //#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
 //  // transpose input if cgemm pt-wise product should be done
@@ -188,9 +182,7 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom, std::comple
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top) {
   // alloc data for pointwise multiplication result (with channels added up) and set memory to 0
-
   std::complex<Dtype> *ptwise_result;
-
   CUDA_CHECK(cudaMalloc(&ptwise_result, this->convolution_result_complex_size_));
   caffe_gpu_memset(this->convolution_result_complex_size_, 0., ptwise_result);
 
@@ -202,7 +194,7 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(std::complex<Dtype> *ffted_bot
 
   CUDA_CHECK(cudaFree(ffted_bottom_data));
 
-  //this->fft_normalize_cpu(ptwise_result, top);
+  this->fft_normalize_gpu(ptwise_result, top);
 }
 
 template<typename Dtype>
@@ -214,12 +206,57 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu(const std::complex<D
   shape.push_back(this->fft_height_);                 //              32
   shape.push_back((this->fft_width_ / 2) + 1);        // 32 / 2 + 1 = 17
 
+  float time;
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start, 0);
   fft_util_pointwise_multiply_gpu<Dtype>(shape, this->group_, ffted_bottom_data, this->ffted_weights_, ptwise_result);
+  cudaEventRecord(stop, 0);
+  cudaEventSynchronize(stop);
+  cudaEventElapsedTime(&time, start, stop);
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
 
-  std::complex<Dtype> *res = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
-  CUDA_CHECK(cudaMemcpy(res, ptwise_result, this->convolution_result_complex_size_, cudaMemcpyDeviceToHost));
+  printf("Elapsed time on gpu: %f ms\n", time);
 
-  printf("copied...");
+//  std::complex<Dtype> *res = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
+//  CUDA_CHECK(cudaMemcpy(res, ptwise_result, this->convolution_result_complex_size_, cudaMemcpyDeviceToHost));
+//
+//  this->write_arr_to_disk("/home/harzigph/res_gpu.txt", this->num_output_, res, true);
+//
+//
+//  printf("copied...");
+}
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(std::complex<Dtype> *ptwise_result, Dtype *top_data) {
+  Dtype *fft_convolution_result_real;
+  CUDA_CHECK(cudaMalloc(&fft_convolution_result_real, this->convolution_result_real_size_));
+  caffe_gpu_memset(this->convolution_result_real_size_, 0., fft_convolution_result_real);
+  cufftHandle ifft_plan;
+  fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_plan, this->fft_height_, this->fft_width_, this->num_output_);
+  fft_gpu_execute_plan_c2r(ifft_plan, ptwise_result, fft_convolution_result_real);
+  fft_gpu_destroy_plan(ifft_plan);
+
+  // free the ptwise-result
+  CUDA_CHECK(cudaFree(ptwise_result));
+  Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
+
+
+  vector<int> shape;
+  shape.push_back(1);
+  shape.push_back(this->num_output_);
+  shape.push_back(this->height_out_);
+  shape.push_back(this->width_out_);
+
+
+  fft_util_normalize_gpu(shape, this->kernel_h_, this->kernel_w_, this->stride_h_, this->stride_w_, ifft_normalize_factor,
+                         this->fft_height_, this->fft_width_, fft_convolution_result_real, top_data);
+
+
+  // free the intermediate convolution result, because data has already been forwarded to top_data.
+  CUDA_CHECK(cudaFree(fft_convolution_result_real));
 }
 
 template<typename Dtype>
@@ -267,6 +304,9 @@ void ConvolutionLayerFFT<float>::fft_pointwise_multiply_gpu(const std::complex<f
                                                             std::complex<float> *ptwise_result);
 
 template
+void ConvolutionLayerFFT<float>::fft_normalize_gpu(std::complex<float> *ptwise_result, float *top_data);
+
+template
 void ConvolutionLayerFFT<float>::mem_info_gpu();
 
 // double instantiation
@@ -294,6 +334,9 @@ void ConvolutionLayerFFT<double>::fft_convolve_gpu(std::complex<double> *ffted_b
 template
 void ConvolutionLayerFFT<double>::fft_pointwise_multiply_gpu(const std::complex<double> *ffted_bottom_data,
                                                             std::complex<double> *ptwise_result);
+
+template
+void ConvolutionLayerFFT<double>::fft_normalize_gpu(std::complex<double> *ptwise_result, double *top_data);
 
 template
 void ConvolutionLayerFFT<double>::mem_info_gpu();
