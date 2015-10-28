@@ -76,47 +76,39 @@ __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K
   //                              x                y
   const int n = blockIdx.x;
 
-  // calculate the channel index. The blockIdx.y is usually zero. Because CUDA_THREADS = 512 > 48 = ch/gr. (48 / 512) + 1 = 1.
-  const int k = blockIdx.y * blockDim.x + threadIdx.x;
+  // calculate the channel index. blockIdx.y is of size (H*W/CUDA_NUM_THREADS). So 1 or 2...
+  const int hw = blockIdx.y * blockDim.x + threadIdx.x;
 
 
-  if (k < K) {
+  if (hw < H*W) {
 
     // printf("<<<%i, %i>>>| n: %i k: %i K: %i\n", blockIdx.x, threadIdx.x, n, k, K);
     // check which group_ idx we are in
     const int group_idx = n / weight_group_size;
 
-    // get the input_k. this is the k we use to index the input k-dimension. the max input_k is group_ times more
-    // than the max k of the weight.
-    const int input_k = k + group_idx * K;
-    const int weight_offset = (n * K + k);
+    // loop over channels
+    for (int k = 0; k < K; ++k) {
+      // get the input_k. this is the k we use to index the input k-dimension. the max input_k is group_ times more
+      // than the max k of the weight.
+      const int input_k = k + group_idx * K;
+      const int weight_offset = (n * K + k);
 
-    /* in the following loops every filter response is being calculated. there are num_output_ * (channels_ / group_) filters...
-     * each (1/group_) part is multiplied with each part of the input. e.g. for group_ = 2, n_o_ 256 and c_ = 96:
-     * weights dim: 256x48x5x5, input dim: 1x96x27x27 --> splitted into [1x48x27x27, 1x48x27x27]
-     * first 128 weights [128x48x5x5] will be convolved with first part of weights (dimension match!) --> 128 responses
-     * same for 2nd part --> 2x128 responses to forward to the next channel
-     */
-    for (int h = 0; h < H; ++h) {
-      for (int w = 0; w < W; ++w) {
-        // Indexing: ((n * K + k) * H + h) * W + w
-        const int input_idx = (input_k * H + h) * W + w; // 4 ops
-        const cufftComplex input = ffted_bottom_data[input_idx];
+      const int input_idx = input_k * H * W + hw;
+      const cufftComplex input = ffted_bottom_data[input_idx];
 
-        const int weight_idx = (weight_offset * H + h) * W + w; // 4 ops
-        const cufftComplex weight = weight_complex[weight_idx];
+      const int weight_idx = weight_offset * H * W + hw;
+      const cufftComplex weight = weight_complex[weight_idx];
 
-        // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
-        // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
-        float a = weight.x;
-        float b = weight.y;
-        float c = input.x;
-        float d = input.y;
+      // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
+      // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
+      float a = weight.x;
+      float b = weight.y;
+      float c = input.x;
+      float d = input.y;
 
-        const int res_idx = (n * H + h) * W + w; // 4 ops; before with channels: ((n * K + k) * H + h) * W + w;
-        atomicAdd(&(ptwise_result[res_idx].x), a * c - b * d);
-        atomicAdd(&(ptwise_result[res_idx].y), b * c + a * d);
-      }
+      const int res_idx = n * H * W + hw;
+      ptwise_result[res_idx].x += a * c - b * d;
+      ptwise_result[res_idx].y += b * c + a * d;
     }
   }
 }
@@ -305,8 +297,9 @@ void fft_util_pointwise_multiply_gpu<float>(std::vector<int> shape, int group, c
   // K = 96 / 2 (channels / group) ==> (48 / 512 ) + 1 = 1
   // dim3 block_num(N, (K / CAFFE_CUDA_NUM_THREADS) + 1);
 
-  // N = num_output, H * W as second dim so no races happen; because over K (channels will be summed up)
-  dim3 block_num(N, (K / CAFFE_CUDA_NUM_THREADS) + 1);
+  // N = num_output, H * W as second dim so no races happen; because over K (channels) will be summed up
+  // On thoise channels sum -ups the threads interfere with another...
+  dim3 block_num(N, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
   int thread_num = CAFFE_CUDA_NUM_THREADS;
 
   const cufftComplex *ffted_bottom_data_cuda  = reinterpret_cast<const cufftComplex *> (ffted_bottom_data);
