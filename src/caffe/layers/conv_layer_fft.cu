@@ -186,8 +186,12 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(std::complex<Dtype> *ffted_bot
   CUDA_CHECK(cudaMalloc(&ptwise_result, this->convolution_result_complex_size_));
   caffe_gpu_memset(this->convolution_result_complex_size_, 0., ptwise_result);
 
-#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_IPP || FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
+  printf("%i", FFT_CONVOLUTION_KIND);
+
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
   this->fft_pointwise_multiply_gpu(ffted_bottom_data, ptwise_result);
+#elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_IPP
+  this->fft_pointwise_multiply_npp_gpu(ffted_bottom_data, ptwise_result);
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   this->fft_pointwise_multiply_gemm_cpu(ffted_bottom_data, ptwise_result);
 #endif
@@ -227,6 +231,31 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu(const std::complex<D
 //
 //
 //  printf("copied...");
+}
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_npp_gpu(const std::complex<Dtype> *ffted_bottom_data,
+                                                                std::complex<Dtype> *ptwise_result) {
+  vector<int> shape;
+  shape.push_back(this->num_output_);                 //              256
+  shape.push_back((this->channels_ / this->group_));  // 96 / 2     = 48
+  shape.push_back(this->fft_height_);                 //              32
+  shape.push_back((this->fft_width_ / 2) + 1);        // 32 / 2 + 1 = 17
+
+  float time;
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+  cudaEventRecord(start, 0);
+  fft_util_pointwise_multiply_npp_gpu<Dtype>(shape, this->group_, ffted_bottom_data,
+                                             this->ffted_weights_, ptwise_result);
+  cudaEventRecord(stop, 0);
+  cudaEventSynchronize(stop);
+  cudaEventElapsedTime(&time, start, stop);
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
+
+  printf("Elapsed time on gpu npp: %f ms\n", time);
 }
 
 template<typename Dtype>
@@ -304,6 +333,10 @@ void ConvolutionLayerFFT<float>::fft_pointwise_multiply_gpu(const std::complex<f
                                                             std::complex<float> *ptwise_result);
 
 template
+void ConvolutionLayerFFT<float>::fft_pointwise_multiply_npp_gpu(const std::complex<float> *ffted_bottom_data,
+                                                                std::complex<float> *ptwise_result);
+
+template
 void ConvolutionLayerFFT<float>::fft_normalize_gpu(std::complex<float> *ptwise_result, float *top_data);
 
 template
@@ -334,6 +367,10 @@ void ConvolutionLayerFFT<double>::fft_convolve_gpu(std::complex<double> *ffted_b
 template
 void ConvolutionLayerFFT<double>::fft_pointwise_multiply_gpu(const std::complex<double> *ffted_bottom_data,
                                                             std::complex<double> *ptwise_result);
+
+template
+void ConvolutionLayerFFT<double>::fft_pointwise_multiply_npp_gpu(const std::complex<double> *ffted_bottom_data,
+                                                                std::complex<double> *ptwise_result);
 
 template
 void ConvolutionLayerFFT<double>::fft_normalize_gpu(std::complex<double> *ptwise_result, double *top_data);

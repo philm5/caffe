@@ -70,6 +70,10 @@ unsigned int next_power_of_2(unsigned int n);
 
 #ifndef CPU_ONLY
 
+template <typename Dtype>
+void npp_complex_add_product(const std::complex<Dtype> *src1, const std::complex<Dtype> *src2,
+                             std::complex<Dtype> *dst, int len);
+
 template<typename Dtype>
 void fft_gpu_plan_many_dft_r2c_2d(cufftHandle *plan, int n0, int n1, int how_many);
 
@@ -93,6 +97,10 @@ void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int f
 template<typename Dtype>
 void fft_util_pointwise_multiply_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *ffted_bottom_data,
                                      const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result);
+
+template<typename Dtype>
+void fft_util_pointwise_multiply_npp_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *ffted_bottom_data,
+                                         const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result);
 
 template <typename Dtype>
 void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,

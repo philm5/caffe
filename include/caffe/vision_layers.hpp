@@ -180,6 +180,14 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
     void write_simple_arr_to_disk(const char *output_name, int size, const Dtype *arr);
 };
 
+/* FFT convolution kind defines */
+
+#define FFT_CONVOLUTION_KIND_POINTWISE_IPP 0
+#define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 1
+#define FFT_CONVOLUTION_KIND_CGEMM 2
+
+#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
+
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
  public:
@@ -228,7 +236,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void fft_pointwise_multiply_gemm_cpu(const std::complex<Dtype> *ffted_bottom_data,
                                                std::complex<Dtype> *ptwise_result);
 
-  virtual void fft_normalize_gpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
+  virtual void fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
 
   /**
    * Helper stuff
@@ -267,7 +275,10 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void fft_pointwise_multiply_gpu(const std::complex<Dtype> *ffted_bottom_data,
                                           std::complex<Dtype> *ptwise_result);
 
-  virtual void fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
+  virtual void fft_pointwise_multiply_npp_gpu(const std::complex<Dtype> *ffted_bottom_data,
+                                              std::complex<Dtype> *ptwise_result);
+
+  virtual void fft_normalize_gpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
 
   virtual void mem_info_gpu();
 #endif

@@ -7,6 +7,7 @@
 #include "caffe/common.hpp"
 #include "caffe/util/fft_util.hpp"
 #include <cufft.h>
+#include <npp.h>
 
 namespace caffe {
 template <typename Dtype>
@@ -120,6 +121,70 @@ __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K
   }
 }
 
+__device__ double atomicAdd(double* address, double val)
+{
+    unsigned long long int* address_as_ull =
+                             (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        __double_as_longlong(val +
+                               __longlong_as_double(assumed)));
+    } while (assumed != old);
+    return __longlong_as_double(old);
+}
+
+__global__ void fft_pointwise_multiply_double_gpu_kernel(const int N, const int K, const int H, const int W,
+                                                         const int weight_group_size, const cufftDoubleComplex *ffted_bottom_data,
+                                                         const cufftDoubleComplex *weight_complex, cufftDoubleComplex *ptwise_result) {
+
+  // blockDim (256, 1) ----- (num_output_, (ch_gr) / CUDA_NUM_THREADS)
+  //                              x                y
+  const int n = blockIdx.x;
+
+  // calculate the channel index. The blockIdx.y is usually zero. Because CUDA_THREADS = 512 > 48 = ch/gr. (48 / 512) + 1 = 1.
+  const int k = blockIdx.y * blockDim.x + threadIdx.x;
+
+
+  if (k < K) {
+    // check which group_ idx we are in
+    const int group_idx = n / weight_group_size;
+
+    // get the input_k. this is the k we use to index the input k-dimension. the max input_k is group_ times more
+    // than the max k of the weight.
+    const int input_k = k + group_idx * K;
+    const int weight_offset = (n * K + k);
+
+    /* in the following loops every filter response is being calculated. there are num_output_ * (channels_ / group_) filters...
+     * each (1/group_) part is multiplied with each part of the input. e.g. for group_ = 2, n_o_ 256 and c_ = 96:
+     * weights dim: 256x48x5x5, input dim: 1x96x27x27 --> splitted into [1x48x27x27, 1x48x27x27]
+     * first 128 weights [128x48x5x5] will be convolved with first part of weights (dimension match!) --> 128 responses
+     * same for 2nd part --> 2x128 responses to forward to the next channel
+     */
+    for (int h = 0; h < H; ++h) {
+      for (int w = 0; w < W; ++w) {
+        // Indexing: ((n * K + k) * H + h) * W + w
+        const int input_idx = (input_k * H + h) * W + w; // 4 ops
+        const cufftDoubleComplex input = ffted_bottom_data[input_idx];
+
+        const int weight_idx = (weight_offset * H + h) * W + w; // 4 ops
+        const cufftDoubleComplex weight = weight_complex[weight_idx];
+
+        // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
+        // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
+        double a = weight.x;
+        double b = weight.y;
+        double c = input.x;
+        double d = input.y;
+
+        const int res_idx = (n * H + h) * W + w; // 4 ops; before with channels: ((n * K + k) * H + h) * W + w;
+        atomicAdd(&(ptwise_result[res_idx].x), a * c - b * d);
+        atomicAdd(&(ptwise_result[res_idx].y), b * c + a * d);
+      }
+    }
+  }
+}
 
 template <typename Dtype>
 __global__ void fft_util_normalize_gpu_kernel(const int N, const int H, const int W, const int kernel_h,
@@ -171,6 +236,23 @@ template __global__ void fft_util_normalize_gpu_kernel<double>(const int N, cons
 
 //// --- end of kernel methods ---
 
+template <>
+void npp_complex_add_product<float>(const std::complex<float> *src1, const std::complex<float> *src2, std::complex<float> *dst, int len)
+{
+  NPP_CHECK(nppsAddProduct_32fc(reinterpret_cast<const Npp32fc *> (src1),
+                                reinterpret_cast<const Npp32fc *> (src2),
+                                reinterpret_cast<Npp32fc *> (dst), len));
+}
+
+template <>
+void npp_complex_add_product<double>(const std::complex<double> *src1, const std::complex<double> *src2, std::complex<double> *dst, int len)
+{
+
+  NPP_CHECK(nppsAddProduct_64fc(reinterpret_cast<const Npp64fc *> (src1),
+                                reinterpret_cast<const Npp64fc *> (src2),
+                                reinterpret_cast<Npp64fc *> (dst), len));
+}
+
 
 template <typename Dtype>
 void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int fft_width,
@@ -221,6 +303,9 @@ void fft_util_pointwise_multiply_gpu<float>(std::vector<int> shape, int group, c
 
   // N = 256 (num_output_)
   // K = 96 / 2 (channels / group) ==> (48 / 512 ) + 1 = 1
+  // dim3 block_num(N, (K / CAFFE_CUDA_NUM_THREADS) + 1);
+
+  // N = num_output, H * W as second dim so no races happen; because over K (channels will be summed up)
   dim3 block_num(N, (K / CAFFE_CUDA_NUM_THREADS) + 1);
   int thread_num = CAFFE_CUDA_NUM_THREADS;
 
@@ -248,8 +333,54 @@ void fft_util_pointwise_multiply_gpu<double>(std::vector<int> shape, int group, 
   dim3 block_num(N, (K / CAFFE_CUDA_NUM_THREADS) + 1);
   int thread_num = CAFFE_CUDA_NUM_THREADS;
 
+  const cufftDoubleComplex *ffted_bottom_data_cuda  = reinterpret_cast<const cufftDoubleComplex *> (ffted_bottom_data);
+  const cufftDoubleComplex *weight_complex_cuda = reinterpret_cast<const cufftDoubleComplex *> (weight_complex);
+  cufftDoubleComplex *ptwise_result_cuda = reinterpret_cast<cufftDoubleComplex *> (ptwise_result);
 
+  fft_pointwise_multiply_double_gpu_kernel<<<block_num, thread_num>>>
+      (N, K, H, W, weight_group_size, ffted_bottom_data_cuda, weight_complex_cuda, ptwise_result_cuda);
+  CUDA_POST_KERNEL_CHECK;
 }
+
+
+template <typename Dtype>
+void fft_util_pointwise_multiply_npp_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
+                                         const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result) {
+  const int N = shape[0];
+  const int K = shape[1];
+  const int H = shape[2];
+  const int W = shape[3];
+
+  const int weight_group_size = N / group;
+  const int fft_complex_size = H * W;
+
+  int n = 0;
+  int k = 0;
+
+  for (n = 0; n < N; ++n) {
+    const int res_offset = n * fft_complex_size;
+    // check which group_ idx we are in
+    const int group_idx = n / weight_group_size;
+    for (k = 0; k < K; ++k) {
+      // get the input_k. this is the k we use to index the input k-dimension. the max input_k is group_ times more
+      // than the max k of the weight.
+      const int input_offset = (k + group_idx * K) * fft_complex_size;
+      const int weight_offset = (n * K + k) * fft_complex_size;
+      npp_complex_add_product<Dtype>(bottom_complex + input_offset, weight_complex + weight_offset,
+                                     ptwise_result + res_offset, fft_complex_size);
+    }
+  }
+}
+
+template void fft_util_pointwise_multiply_npp_gpu<float>(std::vector<int> shape, int group,
+                                                         const std::complex<float> *ffted_bottom_data,
+                                                         const std::complex<float> *weight_complex,
+                                                         std::complex<float> *ptwise_result);
+
+template void fft_util_pointwise_multiply_npp_gpu<double>(std::vector<int> shape, int group,
+                                                          const std::complex<double> *ffted_bottom_data,
+                                                          const std::complex<double> *weight_complex,
+                                                          std::complex<double> *ptwise_result);
 
 template <typename Dtype>
 void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,

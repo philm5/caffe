@@ -12,12 +12,6 @@ namespace caffe {
 
 #define DBG_OUTPUT
 
-#define FFT_CONVOLUTION_KIND_POINTWISE_IPP 0
-#define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 1
-#define FFT_CONVOLUTION_KIND_CGEMM 2
-
-#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
-
 template <typename Dtype>
 ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
   if (this->fft_on_) {
