@@ -57,7 +57,7 @@ Classifier::Classifier(const string& model_file,
 //  Caffe::SetDevice(1);
 //#endif
 
-  Caffe::set_mode(Caffe::GPU);
+  Caffe::set_mode(Caffe::CPU);
 
   /* Load the network. */
   net_.reset(new Net<float>(model_file, TEST));
@@ -263,15 +263,15 @@ int main(int argc, char** argv) {
               << p.first << "\"" << std::endl;
   }
 
-  std::vector<std::pair<std::vector<Prediction>, double> > cls_time;
-
-  // do 1000 classifications:
-  for (size_t i = 0; i < 1000; ++i) {
-    double start_time = cpu_time();
-    std::vector<Prediction> predictions = classifier.Classify(img);
-    double end_time = cpu_time();
-    cls_time.push_back(std::pair<std::vector<Prediction>, double>(predictions, (end_time-start_time) *1000));
-  }
+//  std::vector<std::pair<std::vector<Prediction>, double> > cls_time;
+//
+//  // do 1000 classifications:
+//  for (size_t i = 0; i < 1000; ++i) {
+//    double start_time = cpu_time();
+//    std::vector<Prediction> predictions = classifier.Classify(img);
+//    double end_time = cpu_time();
+//    cls_time.push_back(std::pair<std::vector<Prediction>, double>(predictions, (end_time-start_time) *1000));
+//  }
 
 //  for (size_t i = 0; i < cls_time.size(); ++i) {
 //    std::pair<std::vector<Prediction>, double> pair = cls_time[i];

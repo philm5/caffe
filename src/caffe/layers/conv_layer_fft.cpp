@@ -11,20 +11,27 @@
 namespace caffe {
 
 #define DBG_OUTPUT
+#define WRITE_TOP_RES
 
 template <typename Dtype>
 ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
   if (this->fft_on_) {
-    fft_cpu_free<Dtype>(this->ffted_weights_);
+    if (this->fft_cpu_initialized_ == true) {
+      fft_cpu_free<Dtype>(this->ffted_weights_);
+    }
+    if (this->fft_gpu_initialized_ == true) {
+      this->fft_free_weights_gpu();
+    }
+
   }
 }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                                              const vector<Blob<Dtype>*>& top) {
-  if (this->layer_param().name() == "conv2") {
+  //if (this->layer_param().name() != "conv1") {
     this->fft_on_ = true;
-  }
+  //}
 
   if (this->fft_on_) {
     this->Forward_cpu_fft(bottom, top);
@@ -73,6 +80,13 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
         const Dtype* bias = this->blobs_[1]->cpu_data();
         this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
       }
+      printf("hallo!!!cpp");
+#ifdef WRITE_TOP_RES
+    std::stringstream ss;
+    ss << "res_top_fft.cpp_" << this->layer_param_.name() << ".txt";
+    const char *s = ss.str().c_str();
+    this->write_simple_arr_to_disk(s, top[i]->count() , top[i]->cpu_data());
+#endif
 #ifdef DBG_OUTPUT
       double pass_time = cpu_time();
       LOG(INFO) << "Forward_cpu_fft_single: " << (pass_time - start_time_) * 1000 << "ms.";
@@ -99,11 +113,16 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
 #endif
 
     this->fft_bottom_cpu(bottom, ffted_bottom_data);
-    this->write_arr_to_disk("/home/harzigph/bottom_cpu.txt", this->channels_, ffted_bottom_data, true);
+//    this->write_arr_to_disk("/home/harzigph/bottom_cpu.txt", this->channels_, ffted_bottom_data, true);
 #ifdef DBG_OUTPUT
     double fft_bottom_cpu_time = cpu_time();
 #endif
     this->fft_convolve_cpu(ffted_bottom_data, top);
+
+//    std::stringstream ss;
+//    ss << "bottom_fft_cpu_" << this->layer_param_.name() << ".txt";
+//    const char *s = ss.str().c_str();
+//    this->write_arr_to_disk(s, this->channels_, ffted_bottom_data, true);
 #ifdef DBG_OUTPUT
     double fft_convolve_cpu_time = cpu_time();
 #endif
@@ -224,9 +243,6 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_cpu() {
   // cross-correlation.
   this->pad_real_blob(shape, weight_data, padded_real_weights, 0, 0, true);
 
-
-  this->write_arr_to_disk("/home/harzigph/pad_cpu.txt", this->num_output_ * (this->channels_ / this->group_), padded_real_weights, false);
-
   // The plan for fft of the weights
   // TODO: Do inplace fft to save memory???
   this->ffted_weights_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_weights_complex_size_));
@@ -243,10 +259,6 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_cpu() {
 
   // Do the FFT of the padded weights:
   fft_cpu_execute_plan<Dtype>(fft_weight_plan);
-
-
-
-  this->write_arr_to_disk("/home/harzigph/fft_cpu.txt", this->num_output_ * (this->channels_ / this->group_), this->ffted_weights_, true);
 
   // Destroy the weight plan:
   fft_cpu_destroy_plan<Dtype>(fft_weight_plan);
@@ -326,6 +338,7 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Dtype *bottom, std::comple
                                                                     FFTW_ESTIMATE);
   fft_cpu_execute_plan<Dtype>(fft_bottom_plan);
   fft_cpu_destroy_plan<Dtype>(fft_bottom_plan);
+  fft_cpu_free<Dtype>(padded_real_bottom);
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   // transpose input if cgemm pt-wise product should be done
@@ -348,7 +361,7 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_cpu(std::complex<Dtype> *ffted_bot
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
   caffe_memset(this->convolution_result_complex_size_, 0., ptwise_result);
 
-#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_IPP
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_IPP
   this->fft_pointwise_multiply_ipp_cpu(ffted_bottom_data, ptwise_result);
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
   this->fft_pointwise_multiply_cpu(ffted_bottom_data, ptwise_result);
@@ -555,6 +568,13 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::complex<Dtype> *ptwise_r
   fft_cpu_destroy_plan<Dtype>(ifft_plan);
   fft_cpu_free<Dtype>(ptwise_result);
 
+
+
+  std::stringstream ss;
+  ss << "convolved_fft_cpu_real_" << this->layer_param_.name() << ".txt";
+  const char *s = ss.str().c_str();
+  this->write_arr_to_disk(s, this->num_output_, fft_convolution_result_real_, false);
+
   // here the stride handling and FFT normalization is happening:
   Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
   int N = this->num_output_;
@@ -669,6 +689,9 @@ void ConvolutionLayerFFT<Dtype>::write_arr_to_disk(const char *output_name, size
 
 #ifdef CPU_ONLY
 STUB_GPU(ConvolutionLayerFFT);
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_free_weights_gpu() { NO_GPU; }
 #endif
 
 INSTANTIATE_CLASS(ConvolutionLayerFFT);

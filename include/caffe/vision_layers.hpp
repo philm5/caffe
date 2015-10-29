@@ -265,6 +265,8 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_set_up_gpu();
 
+  virtual void fft_free_weights_gpu();
+
   /*virtual void fft_permute_4d_cpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
                                   const int shape[4], const int permutation[4]);*/
 

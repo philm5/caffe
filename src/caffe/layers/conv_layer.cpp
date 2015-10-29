@@ -10,6 +10,7 @@
 namespace caffe {
 
 // #define WRITE_DEBUG_FW
+#define WRITE_TOP_RES
 
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::compute_output_shape() {
@@ -42,6 +43,14 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       LOG(ERROR) << this->layer_param().name() << ": " << 1000.0 * (end_clock - begin_clock) << " ms.";
  #endif
 
+      //#define WRITE_TOP_RES
+      #ifdef WRITE_TOP_RES
+        std::stringstream ss;
+        ss << "res_top_nor_" << this->layer_param_.name() << ".txt";
+        const char *s = ss.str().c_str();
+        this->write_simple_arr_to_disk(s, top[i]->count() , top[i]->cpu_data());
+      #endif
+
       if (this->bias_term_) {
         const Dtype* bias = this->blobs_[1]->cpu_data();
         this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
@@ -49,35 +58,29 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     }
   }
 
-//#define WRITE_TOP_RES
-#ifdef WRITE_TOP_RES
-  std::stringstream ss;
-  ss << "res_top_nor_" << this->layer_param_.name() << ".txt";
-  const char *s = ss.str().c_str();
-  this->write_simple_arr_to_disk(s, top[0]->count() , top[0]->cpu_data());
-#endif
+
 
   // this->write_simple_arr_to_disk("top_data_non_fft.txt", this->num_output_ * this->height_out_ * this->width_out_, top[0]->mutable_cpu_data());
 }
 
-    template <typename Dtype>
-    void ConvolutionLayer<Dtype>::write_simple_arr_to_disk(const char* output_name, int size, const Dtype *arr)
+  template <typename Dtype>
+  void ConvolutionLayer<Dtype>::write_simple_arr_to_disk(const char* output_name, int size, const Dtype *arr)
+  {
+    std::ofstream fout(output_name); //opening an output stream for file test.txt
+    if(fout.is_open())
     {
-      std::ofstream fout(output_name); //opening an output stream for file test.txt
-      if(fout.is_open())
+      //file opened successfully so we are here
+      std::cout << "File Opened successfully!!!. Writing data from array to file" << std::endl;
+
+      for(int i = 0; i < size; i++)
       {
-        //file opened successfully so we are here
-        std::cout << "File Opened successfully!!!. Writing data from array to file" << std::endl;
-
-        for(int i = 0; i < size; i++)
-        {
-          fout << *(arr + i) << "\n";
-        }
-        std::cout << "Array data successfully saved into the file " << output_name << std::endl;
+        fout << *(arr + i) << "\n";
       }
-
-      fout.close();
+      std::cout << "Array data successfully saved into the file " << output_name << std::endl;
     }
+
+    fout.close();
+  }
 
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
