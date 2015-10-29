@@ -18,7 +18,7 @@ namespace caffe {
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                                              const vector<Blob<Dtype>*>& top) {
-  if (this->layer_param().name() != "conv1") {
+  if (this->layer_param().name() == "conv2") {
     this->fft_on_ = true;
   }
 
@@ -32,7 +32,6 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-  printf("hallo!!!cu");
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->gpu_data();
     Dtype* top_data = top[i]->mutable_gpu_data();
@@ -131,7 +130,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft_single(const Dtype *bottom,
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
-  this->mem_info_gpu();
+//  this->mem_info_gpu();
 
   Dtype *padded_real_weights_gpu;
 
@@ -148,7 +147,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 	pad_real_blob_gpu<Dtype>(shape, this->fft_height_, this->fft_width_, weight_data, padded_real_weights_gpu,
 	                         0, 0, true);
 
-	this->mem_info_gpu();
+//	this->mem_info_gpu();
 	CUDA_CHECK(cudaMalloc(&this->ffted_weights_, this->padded_weights_complex_size_));
 
 	cufftHandle plan;
@@ -156,14 +155,14 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 	caffe_gpu_memset(this->padded_weights_complex_size_, 0., this->ffted_weights_);
 
 	fft_gpu_execute_plan_r2c<Dtype>(plan, padded_real_weights_gpu, this->ffted_weights_);
-	this->mem_info_gpu();
+//	this->mem_info_gpu();
 
 	// destroy the plan
 	fft_gpu_destroy_plan(plan);
 
 	// free the padded real data... (no more need for it)
 	CUDA_CHECK(cudaFree(padded_real_weights_gpu));
-  this->mem_info_gpu();
+//  this->mem_info_gpu();
 
 //
 //#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM

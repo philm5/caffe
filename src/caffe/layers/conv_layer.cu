@@ -7,7 +7,6 @@
 #include "caffe/vision_layers.hpp"
 
 namespace caffe {
-#define WRITE_TOP_RES
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
@@ -23,13 +22,6 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
       }
     }
-
-#ifdef WRITE_TOP_RES
-    std::stringstream ss;
-    ss << "res_top_" << this->layer_param_.name() << ".txt";
-    const char *s = ss.str().c_str();
-    this->write_simple_arr_to_disk(s, top[i]->count() , top[i]->cpu_data());
-#endif
   }
 }
 

@@ -62,7 +62,7 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
                                                       const vector<Blob<Dtype>*>& top) {
   for (int i = 0; i < bottom.size(); ++i) {
-    const Dtype* bottom_data = bottom[i]->cpu_data();heigh
+    const Dtype* bottom_data = bottom[i]->cpu_data();
     Dtype* top_data = top[i]->mutable_cpu_data();
 
     for (int n = 0; n < this->num_; ++n) {
@@ -625,7 +625,7 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
           //   0 0 0 0 0
           //   0 0 0 0 0
 
-          const int idx_weight_real = offset_weight_real + (h + pad_h) * this->fft_height_ + (w + pad_w);
+          const int idx_weight_real = offset_weight_real + (h + pad_h) * this->fft_width_ + (w + pad_w);
           // copy each weight into the fft_weights_in_real_
           // get ptr to blob data. indexing see: http://caffe.berkeleyvision.org/tutorial/net_layer_blob.html
           // Blob memory is row-major in layout, so the last / rightmost dimension changes fastest. For example,
