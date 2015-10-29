@@ -254,7 +254,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
                             const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
-#ifndef CPU_ONLY
+//#ifndef CPU_ONLY
   virtual void Forward_gpu_fft(const vector<Blob<Dtype>*>& bottom,
                                const vector<Blob<Dtype>*>& top);
 
@@ -283,7 +283,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void fft_normalize_gpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
 
   virtual void mem_info_gpu();
-#endif
+//#endif
 
   double start_time_;
 

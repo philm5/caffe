@@ -10,9 +10,6 @@
 
 namespace caffe {
 
-#define DBG_OUTPUT
-#define WRITE_TOP_RES
-
 template <typename Dtype>
 ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
   if (this->fft_on_) {
@@ -65,7 +62,7 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
                                                       const vector<Blob<Dtype>*>& top) {
   for (int i = 0; i < bottom.size(); ++i) {
-    const Dtype* bottom_data = bottom[i]->cpu_data();
+    const Dtype* bottom_data = bottom[i]->cpu_data();heigh
     Dtype* top_data = top[i]->mutable_cpu_data();
 
     for (int n = 0; n < this->num_; ++n) {
@@ -80,13 +77,6 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
         const Dtype* bias = this->blobs_[1]->cpu_data();
         this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
       }
-      printf("hallo!!!cpp");
-#ifdef WRITE_TOP_RES
-    std::stringstream ss;
-    ss << "res_top_fft.cpp_" << this->layer_param_.name() << ".txt";
-    const char *s = ss.str().c_str();
-    this->write_simple_arr_to_disk(s, top[i]->count() , top[i]->cpu_data());
-#endif
 #ifdef DBG_OUTPUT
       double pass_time = cpu_time();
       LOG(INFO) << "Forward_cpu_fft_single: " << (pass_time - start_time_) * 1000 << "ms.";
@@ -188,8 +178,8 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
     std::vector<int> bot_shape;
     bot_shape.push_back(1);
     bot_shape.push_back(this->channels_);
-    bot_shape.push_back(this->height_out_);
-    bot_shape.push_back(this->width_out_);
+    bot_shape.push_back(this->height_);
+    bot_shape.push_back(this->width_);
     this->bottom_shape_ =  bot_shape;
 
     // TODO: clean fft???
@@ -568,13 +558,6 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::complex<Dtype> *ptwise_r
   fft_cpu_destroy_plan<Dtype>(ifft_plan);
   fft_cpu_free<Dtype>(ptwise_result);
 
-
-
-  std::stringstream ss;
-  ss << "convolved_fft_cpu_real_" << this->layer_param_.name() << ".txt";
-  const char *s = ss.str().c_str();
-  this->write_arr_to_disk(s, this->num_output_, fft_convolution_result_real_, false);
-
   // here the stride handling and FFT normalization is happening:
   Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
   int N = this->num_output_;
@@ -642,7 +625,7 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
           //   0 0 0 0 0
           //   0 0 0 0 0
 
-          const int idx_weight_real = offset_weight_real + (h + pad_h) * this->fft_width_ + (w + pad_w);
+          const int idx_weight_real = offset_weight_real + (h + pad_h) * this->fft_height_ + (w + pad_w);
           // copy each weight into the fft_weights_in_real_
           // get ptr to blob data. indexing see: http://caffe.berkeleyvision.org/tutorial/net_layer_blob.html
           // Blob memory is row-major in layout, so the last / rightmost dimension changes fastest. For example,
@@ -691,7 +674,44 @@ void ConvolutionLayerFFT<Dtype>::write_arr_to_disk(const char *output_name, size
 STUB_GPU(ConvolutionLayerFFT);
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(const vector<Blob<Dtype>*>& bottom,
+                                                      const vector<Blob<Dtype>*>& top) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_gpu_normal(const vector<Blob<Dtype>*>& bottom,
+                                  const vector<Blob<Dtype>*>& top) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft_single(const Dtype *bottom, Dtype *top) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() { NO_GPU; }
+
+template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_free_weights_gpu() { NO_GPU; }
+
+  /*virtual void fft_permute_4d_cpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
+                                  const int shape[4], const int permutation[4]);*/
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom, std::complex<Dtype> *&ffted_bottom_data) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu(const std::complex<Dtype> *ffted_bottom_data,
+                                          std::complex<Dtype> *ptwise_result) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_npp_gpu(const std::complex<Dtype> *ffted_bottom_data,
+                                              std::complex<Dtype> *ptwise_result) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(std::complex<Dtype> *ptwise_result, Dtype *top_data) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::mem_info_gpu() { NO_GPU; }
 #endif
 
 INSTANTIATE_CLASS(ConvolutionLayerFFT);
