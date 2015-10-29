@@ -691,7 +691,44 @@ void ConvolutionLayerFFT<Dtype>::write_arr_to_disk(const char *output_name, size
 STUB_GPU(ConvolutionLayerFFT);
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(const vector<Blob<Dtype>*>& bottom,
+                                                      const vector<Blob<Dtype>*>& top) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_gpu_normal(const vector<Blob<Dtype>*>& bottom,
+                                  const vector<Blob<Dtype>*>& top) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft_single(const Dtype *bottom, Dtype *top) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() { NO_GPU; }
+
+template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_free_weights_gpu() { NO_GPU; }
+
+  /*virtual void fft_permute_4d_cpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
+                                  const int shape[4], const int permutation[4]);*/
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom, std::complex<Dtype> *&ffted_bottom_data) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu(const std::complex<Dtype> *ffted_bottom_data,
+                                          std::complex<Dtype> *ptwise_result) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_npp_gpu(const std::complex<Dtype> *ffted_bottom_data,
+                                              std::complex<Dtype> *ptwise_result) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(std::complex<Dtype> *ptwise_result, Dtype *top_data) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::mem_info_gpu() { NO_GPU; }
 #endif
 
 INSTANTIATE_CLASS(ConvolutionLayerFFT);
