@@ -186,7 +186,7 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 #define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 1
 #define FFT_CONVOLUTION_KIND_CGEMM 2
 
-#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
+#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_CGEMM
 
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
@@ -267,9 +267,6 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_free_weights_gpu();
 
-  /*virtual void fft_permute_4d_cpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
-                                  const int shape[4], const int permutation[4]);*/
-
   virtual void fft_bottom_gpu(const Dtype *bottom, std::complex<Dtype> *&ffted_bottom_data);
 
   virtual void fft_convolve_gpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top);
@@ -279,6 +276,9 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_pointwise_multiply_npp_gpu(const std::complex<Dtype> *ffted_bottom_data,
                                               std::complex<Dtype> *ptwise_result);
+
+  virtual void fft_pointwise_multiply_gemm_gpu(const std::complex<Dtype> *ffted_bottom_data,
+                                               std::complex<Dtype> *ptwise_result);
 
   virtual void fft_normalize_gpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
 
@@ -314,6 +314,16 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   int num_threads_;
   int num_weights_;
   std::vector<int> bottom_shape_;
+
+  /* GPU Stuff */
+  cufftHandle fft_bottom_plan_gpu_;
+  cufftHandle ifft_plan_gpu_;
+
+
+  std::complex<Dtype> *ptwise_result_gpu_;
+  Dtype *fft_convolution_result_real_gpu_;
+  Dtype *padded_real_bottom_gpu_;
+  std::complex<Dtype> *ffted_bottom_data_gpu_;
 };
 
 /**

@@ -95,18 +95,26 @@ void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int f
                        const int pad_w, const bool flip);
 
 template<typename Dtype>
-void fft_util_pointwise_multiply_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *ffted_bottom_data,
+void fft_util_pointwise_multiply_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
                                      const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result);
 
 template<typename Dtype>
-void fft_util_pointwise_multiply_npp_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *ffted_bottom_data,
+void fft_util_pointwise_multiply_npp_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
                                          const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result);
+
+template<typename Dtype>
+void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
+                                          const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result);
 
 template <typename Dtype>
 void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,
                             const int kernel_w, const int stride_h, const int stride_w,
                             float normalize_factor, int fft_height, int fft_width,
                             const Dtype *conv_result_real, Dtype *top_data);
+
+template <typename Dtype>
+void fft_util_permute_4d_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
+                             const int shape[4], const int permutation[4]);
 #endif
 
 }

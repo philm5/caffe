@@ -263,19 +263,19 @@ int main(int argc, char** argv) {
               << p.first << "\"" << std::endl;
   }
 
-//  std::vector<std::pair<std::vector<Prediction>, double> > cls_time;
-//
-//  // do 1000 classifications:
-//  for (size_t i = 0; i < 1000; ++i) {
-//    double start_time = cpu_time();
-//    std::vector<Prediction> predictions = classifier.Classify(img);
-//    double end_time = cpu_time();
-//    cls_time.push_back(std::pair<std::vector<Prediction>, double>(predictions, (end_time-start_time) *1000));
-//  }
+  std::vector<std::pair<std::vector<Prediction>, double> > cls_time;
 
-//  for (size_t i = 0; i < cls_time.size(); ++i) {
-//    std::pair<std::vector<Prediction>, double> pair = cls_time[i];
-//    std::cout << std::fixed << std::setprecision(4) << pair.first[0].second << " - \""
-//              << pair.first[0].first << "\" - " << pair.second << "" << std::endl;
-//  }
+  // do 1000 classifications:
+  for (size_t i = 0; i < 1000; ++i) {
+    double start_time = cpu_time();
+    std::vector<Prediction> predictions = classifier.Classify(img);
+    double end_time = cpu_time();
+    cls_time.push_back(std::pair<std::vector<Prediction>, double>(predictions, (end_time-start_time) *1000));
+  }
+
+  for (size_t i = 0; i < cls_time.size(); ++i) {
+    std::pair<std::vector<Prediction>, double> pair = cls_time[i];
+    std::cout << std::fixed << std::setprecision(4) << pair.first[0].second << " - \""
+              << pair.first[0].first << "\" - " << pair.second << "" << std::endl;
+  }
 }

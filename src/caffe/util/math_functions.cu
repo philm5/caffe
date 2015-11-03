@@ -45,6 +45,77 @@ void caffe_gpu_gemm<double>(const CBLAS_TRANSPOSE TransA,
 }
 
 template <>
+void caffe_gpu_gemm_complex<float>(const CBLAS_TRANSPOSE TransA,
+                                   const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                                   const std::complex<float> *alpha, const std::complex<float> *A, const std::complex<float> *B,
+                                   const std::complex<float> *beta, std::complex<float> *C) {
+  // Note that cublas follows fortran order.
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+  cublasOperation_t cuTransA =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  cublasOperation_t cuTransB =
+      (TransB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  CUBLAS_CHECK(cublasCgemm(Caffe::cublas_handle(), cuTransB, cuTransA,
+                           N, M, K, reinterpret_cast<const cuComplex *>(alpha), reinterpret_cast<const cuComplex *>(B), ldb,
+                           reinterpret_cast<const cuComplex *>(A), lda, reinterpret_cast<const cuComplex *>(beta),
+                           reinterpret_cast<cuComplex *>(C), N));
+}
+
+template <>
+void caffe_gpu_gemm_complex<double>(const CBLAS_TRANSPOSE TransA,
+                                    const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                                    const std::complex<double> *alpha, const std::complex<double> *A, const std::complex<double> *B,
+                                    const std::complex<double> *beta, std::complex<double> *C) {
+  // Note that cublas follows fortran order.
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+  cublasOperation_t cuTransA =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  cublasOperation_t cuTransB =
+      (TransB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  CUBLAS_CHECK(cublasZgemm(Caffe::cublas_handle(), cuTransB, cuTransA,
+                           N, M, K, reinterpret_cast<const cuDoubleComplex *>(alpha), reinterpret_cast<const cuDoubleComplex *>(B), ldb,
+                           reinterpret_cast<const cuDoubleComplex *>(A), lda, reinterpret_cast<const cuDoubleComplex *>(beta),
+                           reinterpret_cast<cuDoubleComplex *>(C), N));
+}
+
+template <>
+void caffe_gpu_gemm_complex_batch<float>(const CBLAS_TRANSPOSE TransA,
+                                         const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                                         const std::complex<float> *alpha, const std::complex<float> **A_arr,
+                                         const std::complex<float> **B_arr, const std::complex<float> *beta,
+                                         std::complex<float> **C_arr, int batch_size) {
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+  cublasOperation_t cuTransA =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  cublasOperation_t cuTransB =
+      (TransB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+
+  CUBLAS_CHECK(cublasCgemmBatched(Caffe::cublas_handle(), cuTransB, cuTransA, N, M, K, reinterpret_cast<const cuComplex *>(alpha),
+                                  reinterpret_cast<const cuComplex **>(B_arr), ldb, reinterpret_cast<const cuComplex **>(A_arr), lda,
+                                  reinterpret_cast<const cuComplex *>(beta), reinterpret_cast<cuComplex **>(C_arr), N, batch_size));
+}
+
+template <>
+void caffe_gpu_gemm_complex_batch<double>(const CBLAS_TRANSPOSE TransA,
+                                          const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
+                                          const std::complex<double> *alpha, const std::complex<double> **A_arr,
+                                          const std::complex<double> **B_arr, const std::complex<double> *beta,
+                                          std::complex<double> **C_arr, int batch_size) {
+  int lda = (TransA == CblasNoTrans) ? K : M;
+  int ldb = (TransB == CblasNoTrans) ? N : K;
+  cublasOperation_t cuTransA =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  cublasOperation_t cuTransB =
+      (TransB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  CUBLAS_CHECK(cublasZgemmBatched(Caffe::cublas_handle(), cuTransB, cuTransA, N, M, K, reinterpret_cast<const cuDoubleComplex *>(alpha),
+                                  reinterpret_cast<const cuDoubleComplex **>(B_arr), ldb, reinterpret_cast<const cuDoubleComplex **>(A_arr), lda,
+                                  reinterpret_cast<const cuDoubleComplex *>(beta), reinterpret_cast<cuDoubleComplex **>(C_arr), N, batch_size));
+}
+
+template <>
 void caffe_gpu_gemv<float>(const CBLAS_TRANSPOSE TransA, const int M,
     const int N, const float alpha, const float* A, const float* x,
     const float beta, float* y) {
