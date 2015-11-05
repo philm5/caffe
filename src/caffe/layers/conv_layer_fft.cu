@@ -162,7 +162,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 	CUDA_CHECK(cudaFree(padded_real_weights_gpu));
 
 	// Set-up bottom plan once
-  // Create FFT plan for the bottom datan and alloc memory
+  // Create FFT plan for the bottom data and alloc memory
   fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_bottom_plan_gpu_, this->fft_height_, this->fft_width_, this->channels_ * this->num_);
 
   // Allocate the real and complex memory for the bottom data
@@ -218,7 +218,6 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom, std::comple
   cudaEventCreate(&stop);
   cudaEventRecord(start, 0);
 #endif
-  this->fft_set_up();
   const Dtype *bottom_blob = bottom;
 
   pad_real_blob_gpu(this->bottom_shape_, this->fft_height_, this->fft_width_, bottom_blob, this->padded_real_bottom_gpu_, this->pad_h_, this->pad_w_, false);

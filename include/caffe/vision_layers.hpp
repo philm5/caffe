@@ -215,6 +215,8 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_set_up();
 
+  virtual void fft_free_weights_cpu();
+
   virtual void pad_real_blob(std::vector<int> shape, const Dtype *blob_data, Dtype *padded_data,
                              int pad_h = 0, int pad_w = 0, bool flip = false);
 
@@ -315,6 +317,17 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   int num_weights_;
   std::vector<int> bottom_shape_;
 
+  // Plans and in memory values. It is defined globally so no free and malloc has to be called all the time...
+  // Both different for CPU/GPU
+  void *fft_bottom_plan_;
+  void *ifft_plan_;
+
+  std::complex<Dtype> *ptwise_result_;
+  Dtype *fft_convolution_result_real_;
+  Dtype *padded_real_bottom_;
+  std::complex<Dtype> *ffted_bottom_data_;
+
+#ifndef CPU_ONLY
   /* GPU Stuff */
   cufftHandle fft_bottom_plan_gpu_;
   cufftHandle ifft_plan_gpu_;
@@ -324,6 +337,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   Dtype *fft_convolution_result_real_gpu_;
   Dtype *padded_real_bottom_gpu_;
   std::complex<Dtype> *ffted_bottom_data_gpu_;
+#endif
 };
 
 /**
