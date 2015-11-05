@@ -167,20 +167,20 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
     this->padded_weights_real_size_ = this->fft_real_size_ * this->num_weights_ * sizeof(Dtype);
     this->padded_weights_complex_size_ = this->fft_complex_size_ * this->num_weights_ * sizeof(std::complex<Dtype>);
     // now the sizes for the bottom data:
-    this->padded_bottom_real_size_ = this->fft_real_size_ * this->channels_ * 1 * sizeof(Dtype);
-    this->padded_bottom_complex_size_ = this->fft_complex_size_ * this->channels_ * 1 * sizeof(std::complex<Dtype>);
+    this->padded_bottom_real_size_ = this->fft_real_size_ * this->channels_ * this->num_ * sizeof(Dtype);
+    this->padded_bottom_complex_size_ = this->fft_complex_size_ * this->channels_ * this->num_ * sizeof(std::complex<Dtype>);
     // and the sizes for the result (before normalizing and applying the stride):
-    this->convolution_result_real_size_ = this->fft_real_size_ * this->num_output_ * sizeof(Dtype);
-    this->convolution_result_complex_size_ = this->fft_complex_size_ * this->num_output_ * sizeof(std::complex<Dtype>);
+    this->convolution_result_real_size_ = this->fft_real_size_ * this->num_output_ * this->num_ * sizeof(Dtype);
+    this->convolution_result_complex_size_ = this->fft_complex_size_ * this->num_output_ * this->num_ * sizeof(std::complex<Dtype>);
 
     // set the shape of the input bottom shape. In the Forward_cpu the first dim of bottom can be more than 1 if
     // more than one image is passed (batching). But every input image is processed separately.
     std::vector<int> bot_shape;
-    bot_shape.push_back(1);
+    bot_shape.push_back(this->num_);
     bot_shape.push_back(this->channels_);
     bot_shape.push_back(this->height_);
     bot_shape.push_back(this->width_);
-    this->bottom_shape_ =  bot_shape;
+    this->bottom_shape_ = bot_shape;
 
     // TODO: clean fft???
     // Do specific handling for allocation on cpu/gpu:

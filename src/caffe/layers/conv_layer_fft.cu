@@ -18,7 +18,7 @@ namespace caffe {
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                                              const vector<Blob<Dtype>*>& top) {
-  if (this->layer_param().name() == "conv2") {
+  if (this->layer_param().name() == "conv1") {
     this->fft_on_ = true;
   }
 
@@ -36,9 +36,10 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(
     const Dtype* bottom_data = bottom[i]->gpu_data();
     Dtype* top_data = top[i]->mutable_gpu_data();
 
+    this->Forward_gpu_fft_single(bottom_data + bottom[i]->offset(0),
+                                 top_data + top[i]->offset(0));
+
     for (int n = 0; n < this->num_; ++n) {
-      this->Forward_gpu_fft_single(bottom_data + bottom[i]->offset(n),
-                                   top_data + top[i]->offset(n));
       if (this->bias_term_) {
         const Dtype* bias = this->blobs_[1]->gpu_data();
         this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
@@ -162,7 +163,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 
 	// Set-up bottom plan once
   // Create FFT plan for the bottom datan and alloc memory
-  fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_bottom_plan_gpu_, this->fft_height_, this->fft_width_, this->channels_);
+  fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_bottom_plan_gpu_, this->fft_height_, this->fft_width_, this->channels_ * this->num_);
 
   // Allocate the real and complex memory for the bottom data
 
@@ -173,7 +174,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
   CUDA_CHECK(cudaMalloc(&ptwise_result_gpu_, this->convolution_result_complex_size_));
 
 
-  fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_plan_gpu_, this->fft_height_, this->fft_width_, this->num_output_);
+  fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_plan_gpu_, this->fft_height_, this->fft_width_, this->num_output_ * this->num_);
 
 //  this->mem_info_gpu();
 
@@ -220,7 +221,6 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom, std::comple
   this->fft_set_up();
   const Dtype *bottom_blob = bottom;
 
-  // now pad the bottom data (it should have its origin in (h,w)), but don't flip it.
   pad_real_blob_gpu(this->bottom_shape_, this->fft_height_, this->fft_width_, bottom_blob, this->padded_real_bottom_gpu_, this->pad_h_, this->pad_w_, false);
 
 #ifdef DBG_OUTPUT
@@ -235,7 +235,7 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom, std::comple
   // transpose input if cgemm pt-wise product should be done
   std::complex<Dtype> *fft_transposed_bottom;
   CUDA_CHECK(cudaMalloc(&fft_transposed_bottom, this->padded_bottom_complex_size_));
-  const int shape_bottom[] = {1, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
+  const int shape_bottom[] = {this->num_, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
   const int permutation_bottom[] = {2, 3, 0, 1};
   fft_util_permute_4d_gpu(ffted_bottom_data, fft_transposed_bottom, shape_bottom, permutation_bottom);
   CUDA_CHECK(cudaFree(ffted_bottom_data));
@@ -289,7 +289,7 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(std::complex<Dtype> *ffted_bot
 #endif
 
 //  std::complex<Dtype> *res = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
-//  CUDA_CHECK(cudaMemcpy(res, ptwise_result, this->convolution_result_complex_size_, cudaMemcpyDeviceToHost));
+//  CUDA_CHECK(cudaMemcpy(res, this->ptwise_result_gpu_, this->convolution_result_complex_size_, cudaMemcpyDeviceToHost));
 //  std::stringstream ss;
 //  ss << "convolved_fft_" << this->layer_param_.name() << ".txt";
 //  const char *s = ss.str().c_str();
@@ -323,6 +323,7 @@ template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu(const std::complex<Dtype> *ffted_bottom_data,
                                                             std::complex<Dtype> *ptwise_result) {
   vector<int> shape;
+  shape.push_back(this->num_);                        //              10 (batch size)
   shape.push_back(this->num_output_);                 //              256
   shape.push_back((this->channels_ / this->group_));  // 96 / 2     = 48
   shape.push_back(this->fft_height_);                 //              32
@@ -380,6 +381,7 @@ template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_gpu(const std::complex<Dtype> *ffted_bottom_data,
                                                                       std::complex<Dtype> *ptwise_result) {
   vector<int> shape;
+  shape.push_back(this->num_);                        //              10 (batch size)
   shape.push_back(this->num_output_);                 //              256
   shape.push_back((this->channels_ / this->group_));  // 96 / 2     = 48
   shape.push_back(this->fft_height_);                 //              32
@@ -413,11 +415,10 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(std::complex<Dtype> *ptwise_r
   Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
 
   vector<int> shape;
-  shape.push_back(1);
+  shape.push_back(this->num_);
   shape.push_back(this->num_output_);
   shape.push_back(this->height_out_);
   shape.push_back(this->width_out_);
-
 
   fft_util_normalize_gpu(shape, this->kernel_h_, this->kernel_w_, this->stride_h_, this->stride_w_, ifft_normalize_factor,
                          this->fft_height_, this->fft_width_, this->fft_convolution_result_real_gpu_, top_data);

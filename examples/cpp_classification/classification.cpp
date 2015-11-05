@@ -19,6 +19,8 @@ using std::string;
 /* Pair (label, confidence) representing a prediction. */
 typedef std::pair<string, float> Prediction;
 
+const int batch = 10;
+
 class Classifier {
  public:
   Classifier(const string& model_file,
@@ -152,7 +154,7 @@ void Classifier::SetMean(const string& mean_file) {
 
 std::vector<float> Classifier::Predict(const cv::Mat& img) {
   Blob<float>* input_layer = net_->input_blobs()[0];
-  input_layer->Reshape(1, num_channels_,
+  input_layer->Reshape(batch, num_channels_,
                        input_geometry_.height, input_geometry_.width);
   /* Forward dimension change to all layers. */
   net_->Reshape();
@@ -182,7 +184,7 @@ void Classifier::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
   int width = input_layer->width();
   int height = input_layer->height();
   float* input_data = input_layer->mutable_cpu_data();
-  for (int i = 0; i < input_layer->channels(); ++i) {
+  for (int i = 0; i < input_layer->channels() * batch; ++i) {
     cv::Mat channel(height, width, CV_32FC1, input_data);
     input_channels->push_back(channel);
     input_data += width * height;
@@ -222,7 +224,10 @@ void Classifier::Preprocess(const cv::Mat& img,
   /* This operation will write the separate BGR planes directly to the
    * input layer of the network because it is wrapped by the cv::Mat
    * objects in input_channels. */
-  cv::split(sample_normalized, *input_channels);
+  for (int i = 0; i < batch; ++i) {
+    cv::Mat *ptr = &(input_channels->at(img.channels()*i));
+    cv::split(sample_normalized, ptr);
+  }
 
   CHECK(reinterpret_cast<float*>(input_channels->at(0).data)
         == net_->input_blobs()[0]->cpu_data())
@@ -266,7 +271,7 @@ int main(int argc, char** argv) {
   std::vector<std::pair<std::vector<Prediction>, double> > cls_time;
 
   // do 1000 classifications:
-  for (size_t i = 0; i < 1000; ++i) {
+  for (size_t i = 0; i < 10; ++i) {
     double start_time = cpu_time();
     std::vector<Prediction> predictions = classifier.Classify(img);
     double end_time = cpu_time();
