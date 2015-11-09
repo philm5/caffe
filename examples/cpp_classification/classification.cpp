@@ -19,7 +19,7 @@ using std::string;
 /* Pair (label, confidence) representing a prediction. */
 typedef std::pair<string, float> Prediction;
 
-const int batch = 1;
+const int batch = 10;
 
 class Classifier {
  public:

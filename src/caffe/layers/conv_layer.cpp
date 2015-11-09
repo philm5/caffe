@@ -10,7 +10,7 @@
 namespace caffe {
 
 // #define WRITE_DEBUG_FW
-#define WRITE_TOP_RES
+// #define WRITE_TOP_RES
 
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::compute_output_shape() {

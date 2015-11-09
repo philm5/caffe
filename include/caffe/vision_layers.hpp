@@ -225,20 +225,17 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void fft_permute_4d_cpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
                                   const int shape[4], const int permutation[4]);
 
-  virtual void fft_bottom_cpu(const Dtype *bottom, std::complex<Dtype> *&ffted_bottom_data);
+  virtual void fft_bottom_cpu(const Dtype *bottom);
 
-  virtual void fft_convolve_cpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top);
+  virtual void fft_convolve_cpu(Dtype *top);
 
-  virtual void fft_pointwise_multiply_cpu(const std::complex<Dtype> *ffted_bottom_data,
-                                          std::complex<Dtype> *ptwise_result);
+  virtual void fft_pointwise_multiply_cpu();
 
-  virtual void fft_pointwise_multiply_ipp_cpu(const std::complex<Dtype> *ffted_bottom_data,
-                                              std::complex<Dtype> *ptwise_result);
+  virtual void fft_pointwise_multiply_ipp_cpu();
 
-  virtual void fft_pointwise_multiply_gemm_cpu(const std::complex<Dtype> *ffted_bottom_data,
-                                               std::complex<Dtype> *ptwise_result);
+  virtual void fft_pointwise_multiply_gemm_cpu();
 
-  virtual void fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
+  virtual void fft_normalize_cpu(Dtype *top_data);
 
   /**
    * Helper stuff
@@ -256,7 +253,6 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
                             const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
-//#ifndef CPU_ONLY
   virtual void Forward_gpu_fft(const vector<Blob<Dtype>*>& bottom,
                                const vector<Blob<Dtype>*>& top);
 
@@ -269,23 +265,19 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_free_weights_gpu();
 
-  virtual void fft_bottom_gpu(const Dtype *bottom, std::complex<Dtype> *&ffted_bottom_data);
+  virtual void fft_bottom_gpu(const Dtype *bottom);
 
-  virtual void fft_convolve_gpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top);
+  virtual void fft_convolve_gpu(Dtype *top);
 
-  virtual void fft_pointwise_multiply_gpu(const std::complex<Dtype> *ffted_bottom_data,
-                                          std::complex<Dtype> *ptwise_result);
+  virtual void fft_pointwise_multiply_gpu();
 
-  virtual void fft_pointwise_multiply_npp_gpu(const std::complex<Dtype> *ffted_bottom_data,
-                                              std::complex<Dtype> *ptwise_result);
+  virtual void fft_pointwise_multiply_npp_gpu();
 
-  virtual void fft_pointwise_multiply_gemm_gpu(const std::complex<Dtype> *ffted_bottom_data,
-                                               std::complex<Dtype> *ptwise_result);
+  virtual void fft_pointwise_multiply_gemm_gpu();
 
-  virtual void fft_normalize_gpu(std::complex<Dtype> *ptwise_result, Dtype *top_data);
+  virtual void fft_normalize_gpu(Dtype *top_data);
 
   virtual void mem_info_gpu();
-//#endif
 
   double start_time_;
 

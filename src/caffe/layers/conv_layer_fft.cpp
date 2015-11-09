@@ -26,9 +26,9 @@ ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                                              const vector<Blob<Dtype>*>& top) {
-  //if (this->layer_param().name() == "conv1") {
+  if (this->layer_param().name() == "conv2") {
     this->fft_on_ = true;
-  //}
+  }
 
   if (this->fft_on_) {
     this->Forward_cpu_fft(bottom, top);
@@ -101,12 +101,12 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
     double memset_bottom_time = cpu_time();
 #endif
 
-    this->fft_bottom_cpu(bottom, this->ffted_bottom_data_);
+    this->fft_bottom_cpu(bottom);
 //    this->write_arr_to_disk("/home/harzigph/bottom_cpu.txt", this->channels_, ffted_bottom_data, true);
 #ifdef DBG_OUTPUT
     double fft_bottom_cpu_time = cpu_time();
 #endif
-    this->fft_convolve_cpu(this->ffted_bottom_data_, top);
+    this->fft_convolve_cpu(top);
 
 //    std::stringstream ss;
 //    ss << "bottom_fft_cpu_" << this->layer_param_.name() << ".txt";
@@ -124,8 +124,6 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
     LOG(INFO) << "fft_convolve_cpu: " << (fft_convolve_cpu_time - fft_bottom_cpu_time) * 1000 << "ms.";
 #endif
   }
-
-
 
 /**
  * Generic FFT Stuff:
@@ -344,7 +342,7 @@ void ConvolutionLayerFFT<Dtype>::fft_free_weights_cpu() {
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Dtype *bottom, std::complex<Dtype> *&ffted_bottom_data) {
+void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Dtype *bottom) {
   const Dtype *bottom_blob = bottom;
 
   // now pad the bottom data (it should have its origin in (h,w)), but don't flip it.1
@@ -362,38 +360,83 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Dtype *bottom, std::comple
   fft_cpu_execute_plan<Dtype>(this->fft_bottom_plan_);
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+//  std::stringstream ss;
+//  ss << "bottom_before_regroup_" << this->layer_param_.name() << ".txt";
+//  const char *s = ss.str().c_str();
+//  this->write_arr_to_disk(s, this->channels_ * this->num_, this->ffted_bottom_data_, true);
+
   // transpose input if cgemm pt-wise product should be done
   std::complex<Dtype> *fft_transposed_bottom =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_bottom_complex_size_));
-  const int shape_bottom[] = {this->num_, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
-  const int permutation_bottom[] = {2, 3, 0, 1};
-  this->fft_permute_4d_cpu(this->ffted_bottom_data_, fft_transposed_bottom, shape_bottom, permutation_bottom);
 
-  fft_cpu_free<Dtype>(this->ffted_bottom_data_);
-  this->ffted_bottom_data_ = fft_transposed_bottom;
+
+  if (this->group_ > 1) {
+    //                                                   48 * 32 * 17
+    const int group_size = (this->channels_ / this->group_) * this->fft_complex_size_;
+
+    for (int n = 0; n < this->num_; ++n) {
+      for (int g = 0; g < this->group_; ++g) {
+        const int src_idx = (n * this->group_  + g) * group_size;
+        const int dst_idx = (n + g * this->num_) * group_size;
+
+        memcpy(fft_transposed_bottom + dst_idx, this->ffted_bottom_data_ + src_idx, group_size * sizeof(std::complex<Dtype>));
+      }
+    }
+
+    const int shape_bottom[] = {this->num_, this->channels_ / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1};
+    const int permutation_bottom[] = {2, 3, 0, 1};
+    const int group_offset = (this->fft_complex_size_ * this->channels_ * this->num_) / this->group_;
+
+    for (int g = 0; g < this->group_; ++g) {
+      this->fft_permute_4d_cpu(fft_transposed_bottom + g * group_offset, this->ffted_bottom_data_ + g * group_offset, shape_bottom, permutation_bottom);
+    }
+
+    fft_cpu_free<Dtype>(fft_transposed_bottom);
+  }
+  else
+  {
+    // case with group == 0 is much simpler
+    const int shape_bottom[] = {this->num_, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
+    const int permutation_bottom[] = {2, 3, 0, 1};
+    this->fft_permute_4d_cpu(this->ffted_bottom_data_, fft_transposed_bottom, shape_bottom, permutation_bottom);
+
+    fft_cpu_free<Dtype>(this->ffted_bottom_data_);
+    this->ffted_bottom_data_ = fft_transposed_bottom;
+  }
 #endif
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_convolve_cpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top) {
+void ConvolutionLayerFFT<Dtype>::fft_convolve_cpu(Dtype *top) {
   // alloc data for pointwise multiplication result (with channels added up) and set memory to 0
-
   caffe_memset(this->convolution_result_complex_size_, 0., this->ptwise_result_);
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_IPP
-  this->fft_pointwise_multiply_ipp_cpu(this->ffted_bottom_data_, this->ptwise_result_);
+  this->fft_pointwise_multiply_ipp_cpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
-  this->fft_pointwise_multiply_cpu(this->ffted_bottom_data_, this->ptwise_result_);
+  this->fft_pointwise_multiply_cpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
-  this->fft_pointwise_multiply_gemm_cpu(this->ffted_bottom_data_, this->ptwise_result_);
+  this->fft_pointwise_multiply_gemm_cpu();
 #endif
 
-  this->fft_normalize_cpu(this->ptwise_result_, top);
+//  // alloc data for result
+//  std::complex<Dtype> * fft_transposed_result =
+//      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
+//  const int shape_result[] = {this->num_, this->num_output_, this->fft_height_, (this->fft_width_ /2 )+1};
+//  const int permutation_result[] = {2, 3, 0, 1};
+//  this->fft_permute_4d_cpu(this->ptwise_result_, fft_transposed_result, shape_result, permutation_result);
+
+//  std::stringstream ss;
+//  ss << "convolved_complex_gemm_new_" << this->layer_param_.name() << ".txt";
+//  const char *s = ss.str().c_str();
+//  this->write_arr_to_disk(s, this->num_output_ * this->num_, this->ptwise_result_, true);
+//  // fft_cpu_free<Dtype>(fft_transposed_result);
+
+  this->fft_normalize_cpu(top);
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu(const std::complex<Dtype> *ffted_bottom_data,
-                                                            std::complex<Dtype> *ptwise_result) {
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu() {
   const int batch_size = this->num_;            //              10
   const int N = this->num_output_;              //              256
   const int K = this->channels_ / this->group_; // 96 / 2     = 48
@@ -408,11 +451,12 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu(const std::complex<D
   int hw = 0;
 
   std::complex<Dtype> *weight_complex = this->ffted_weights_;
+  std::complex<Dtype> *this_bottom_data = this->ffted_bottom_data_;
+  std::complex<Dtype> *this_ptwise_result_ = this->ptwise_result_;
 
 //// TODO: change loop like in gpu version --> openmp possible
 #ifdef _OPENMP
-#pragma omp parallel for \
-          private(batch_idx, n, hw) collapse(3) //shared(ptwise_result, ffted_bottom_data, weight_complex)
+#pragma omp parallel for private(batch_idx, n, hw) collapse(3) shared(this_ptwise_result_) //, ffted_bottom_data, weight_complex)
 #endif
   for (batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
     for (n = 0; n < N; ++n) {
@@ -428,11 +472,11 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu(const std::complex<D
 
           // offset bottom to batch_idx image
           const int bottom_offset = K * this->group_ * H * W * batch_idx;
-          const std::complex<Dtype> *bottom_data = ffted_bottom_data + bottom_offset;
+          const std::complex<Dtype> *bottom_data = this_bottom_data + bottom_offset;
 
           // offset res to batch_idx image
           const int res_offset = N * H * W * batch_idx;
-          std::complex<Dtype> *res_data = this->ptwise_result_ + res_offset;
+          std::complex<Dtype> *res_data = this_ptwise_result_ + res_offset;
 
 
           // this loop cannot be parallelized (because it is adding up stuff in the same memory address!
@@ -466,8 +510,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu(const std::complex<D
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu(const std::complex<Dtype> *ffted_bottom_data,
-                                                                std::complex<Dtype> *ptwise_result) {
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu() {
   const int N = this->num_output_;
   const int K = this->channels_ / this->group_;
   const int weight_group_size = N / this->group_;
@@ -475,7 +518,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu(const std::compl
   int n = 0;
   int k = 0;
 
-  const std::complex<Dtype> *bottom_complex = ffted_bottom_data;
+  const std::complex<Dtype> *bottom_complex = this->ffted_bottom_data_;
   std::complex<Dtype> *weight_complex = this->ffted_weights_;
 
 //#ifdef _OPENMP
@@ -493,38 +536,42 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu(const std::compl
       const int weight_offset = (n * K + k) * this->fft_complex_size_;
 
       // pSrcDst[n ] = pSrcDst[n ] + pSrc1[n ] * pSrc2[n ], 0 ��������� n < len.
-      ipp_complex_add_product<Dtype>(bottom_complex + input_offset, weight_complex + weight_offset, ptwise_result + res_offset, this->fft_complex_size_);
+      ipp_complex_add_product<Dtype>(bottom_complex + input_offset, weight_complex + weight_offset, this->ptwise_result_ + res_offset, this->fft_complex_size_);
     }
   }
 }
 
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu(const std::complex<Dtype> *ffted_bottom_data,
-                                                                 std::complex<Dtype> *ptwise_result) {
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
   // alloc data for result
   std::complex<Dtype> * fft_transposed_result =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
-
-  //                      num_output * channels / group = 96 * 3
-  const int weight_size = this->num_output_ * (this->channels_ / this->group_);
-
-  //                      num_images      * channels    =  1 * 3
-  const int bottom_size = this->num_ * this->channels_;
-
-  //                      num_output * num_images       = 96 * 1
-  const int output_size = this->num_output_ * this->num_;
-
-  const std::complex<Dtype> one_complex(1., 0.);
-  const std::complex<Dtype> zero_complex(0., 0.);
 
   const int H = this->fft_height_;
   const int W = (this->fft_width_ / 2) + 1;
   const int G = this->group_;
 
+  //                      num_output * channels / group = 96 * 3
+  const int weight_size = this->num_output_ * (this->channels_ / G);
+
+  //                      num_images      * channels / G   =  1 * 3
+  // if G = 2, the size is half but there are two of bottom data blob behind each other in memory. e.g.:
+  // batch size = 3: three times group 1 and then three times group 2: 123|123 for each input.
+  const int bottom_size = (this->num_ * this->channels_) / G;
+
+  //                      num_output * num_images       = 96 * 1
+  const int output_size = (this->num_output_ * this->num_) / G;
+
+  const std::complex<Dtype> one_complex(1., 0.);
+  const std::complex<Dtype> zero_complex(0., 0.);
+
   const int group_offset_weight = weight_size / G;
-  const int group_offset_input = bottom_size / G;
-  const int group_offset_output = output_size / G;
+  // the gorup offset_input is really huge because two groups are behind each other in memory where all inputs of a single group are behind each other.
+  // so the offset is half the total size of the input. e.g.: 32x17x10x96/2 for conv2
+  const int group_offset_input = (H * W * bottom_size);
+  //  const int group_offset_input = bottom_size / G;
+  const int group_offset_output = (H * W * output_size);
 
 //  const int M = this->num_output_ / G;
 //  const int N = this->num_;
@@ -532,7 +579,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu(const std::comp
 
   const int M = this->num_; //this->num_output_ / G;
   const int N = this->num_output_ / G; // this->num_;
-  const int K = this->channels_ / this->group_;
+  const int K = this->channels_ / G;
 
   const std::complex<Dtype> **weight_arr = new const std::complex<Dtype> *[H*W*G];
   const std::complex<Dtype> **input_arr = new const std::complex<Dtype> *[H*W*G];
@@ -555,12 +602,6 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu(const std::comp
         input_arr[idx] = input + g * group_offset_input;
         output_arr[idx] = output + g * group_offset_output;
         idx++;
-//        std::complex<Dtype> *weight_g = weight + g * group_offset_weight;
-//        std::complex<Dtype> *input_g = input + g * group_offset_input;
-//        std::complex<Dtype> *output_g = output + g * group_offset_output;
-//
-//        caffe_cpu_gemm_complex<Dtype>(CblasNoTrans, CblasTrans, M, N, K,
-//                                      &one_complex, weight_g, input_g, &zero_complex, output_g);
       }
     }
   }
@@ -573,16 +614,40 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu(const std::comp
   delete input_arr;
   delete output_arr;
 
-  // result_dim = 256 x 129 x 96 x 1 ==> 1 x 96 x 256 x 129
-  const int shape_result[] = {H, W, this->num_, this->num_output_};
+  const int shape_result[] = {H, W, this->num_, this->num_output_ / G};
   const int permutation_result[] = {2, 3, 0, 1};
-  this->fft_permute_4d_cpu(fft_transposed_result, this->ptwise_result_, shape_result, permutation_result);
-  fft_cpu_free<Dtype>(fft_transposed_result);
+
+  const int group_offset = (this->fft_complex_size_ * this->num_output_ * this->num_) / this->group_;
+
+  // permute per group.
+  for (int g = 0; g < this->group_; ++g) {
+    this->fft_permute_4d_cpu(fft_transposed_result + g * group_offset, this->ptwise_result_ + g * group_offset, shape_result, permutation_result);
+  }
+
+  // reorganize group layout...
+  if (this->group_ > 1) {
+    //                                                    128 * 32 * 17
+    const int group_size = (this->num_output_ / this->group_) * this->fft_complex_size_;
+
+    for (int n = 0; n < this->num_; ++n) {
+      for (int g = 0; g < this->group_; ++g) {
+        const int dst_idx = (n * this->group_  + g) * group_size;
+        const int src_idx = (n + g * this->num_) * group_size;
+
+        memcpy(fft_transposed_result + dst_idx, this->ptwise_result_ + src_idx, group_size * sizeof(std::complex<Dtype>));
+      }
+    }
+
+    fft_cpu_free<Dtype>(this->ptwise_result_);
+    this->ptwise_result_ = fft_transposed_result;
+  } else {
+    fft_cpu_free<Dtype>(fft_transposed_result);
+  }
 }
 
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::complex<Dtype> *ptwise_result, Dtype *top_data) {
+void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(Dtype *top_data) {
 
   this->ifft_plan_ = fft_cpu_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
                                                          this->fft_width_,
@@ -728,25 +793,22 @@ void ConvolutionLayerFFT<Dtype>::fft_free_weights_gpu() { NO_GPU; }
                                   const int shape[4], const int permutation[4]);*/
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom, std::complex<Dtype> *&ffted_bottom_data) { NO_GPU; }
+void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom) { NO_GPU; }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(std::complex<Dtype> *ffted_bottom_data, Dtype *top) { NO_GPU; }
+void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(Dtype *top) { NO_GPU; }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu(const std::complex<Dtype> *ffted_bottom_data,
-                                          std::complex<Dtype> *ptwise_result) { NO_GPU; }
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu() { NO_GPU; }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_npp_gpu(const std::complex<Dtype> *ffted_bottom_data,
-                                              std::complex<Dtype> *ptwise_result) { NO_GPU; }
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_npp_gpu() { NO_GPU; }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_gpu(const std::complex<Dtype> *ffted_bottom_data,
-                                              std::complex<Dtype> *ptwise_result) { NO_GPU; }
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_gpu() { NO_GPU; }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(std::complex<Dtype> *ptwise_result, Dtype *top_data) { NO_GPU; }
+void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(Dtype *top_data) { NO_GPU; }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::mem_info_gpu() { NO_GPU; }
