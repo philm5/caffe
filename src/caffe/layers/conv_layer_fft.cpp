@@ -370,30 +370,30 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Dtype *bottom) {
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_bottom_complex_size_));
 
 
-  if (this->group_ > 1) {
-    //                                                   48 * 32 * 17
-    const int group_size = (this->channels_ / this->group_) * this->fft_complex_size_;
-
-    for (int n = 0; n < this->num_; ++n) {
-      for (int g = 0; g < this->group_; ++g) {
-        const int src_idx = (n * this->group_  + g) * group_size;
-        const int dst_idx = (n + g * this->num_) * group_size;
-
-        memcpy(fft_transposed_bottom + dst_idx, this->ffted_bottom_data_ + src_idx, group_size * sizeof(std::complex<Dtype>));
-      }
-    }
-
-    const int shape_bottom[] = {this->num_, this->channels_ / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1};
-    const int permutation_bottom[] = {2, 3, 0, 1};
-    const int group_offset = (this->fft_complex_size_ * this->channels_ * this->num_) / this->group_;
-
-    for (int g = 0; g < this->group_; ++g) {
-      this->fft_permute_4d_cpu(fft_transposed_bottom + g * group_offset, this->ffted_bottom_data_ + g * group_offset, shape_bottom, permutation_bottom);
-    }
-
-    fft_cpu_free<Dtype>(fft_transposed_bottom);
-  }
-  else
+//  if (this->group_ > 1) {
+//    //                                                   48 * 32 * 17
+//    const int group_size = (this->channels_ / this->group_) * this->fft_complex_size_;
+//
+//    for (int n = 0; n < this->num_; ++n) {
+//      for (int g = 0; g < this->group_; ++g) {
+//        const int src_idx = (n * this->group_  + g) * group_size;
+//        const int dst_idx = (n + g * this->num_) * group_size;
+//
+//        memcpy(fft_transposed_bottom + dst_idx, this->ffted_bottom_data_ + src_idx, group_size * sizeof(std::complex<Dtype>));
+//      }
+//    }
+//
+//    const int shape_bottom[] = {this->num_, this->channels_ / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1};
+//    const int permutation_bottom[] = {2, 3, 0, 1};
+//    const int group_offset = (this->fft_complex_size_ * this->channels_ * this->num_) / this->group_;
+//
+//    for (int g = 0; g < this->group_; ++g) {
+//      this->fft_permute_4d_cpu(fft_transposed_bottom + g * group_offset, this->ffted_bottom_data_ + g * group_offset, shape_bottom, permutation_bottom);
+//    }
+//
+//    fft_cpu_free<Dtype>(fft_transposed_bottom);
+//  }
+//  else
   {
     // case with group == 0 is much simpler
     const int shape_bottom[] = {this->num_, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
@@ -558,10 +558,10 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
   //                      num_images      * channels / G   =  1 * 3
   // if G = 2, the size is half but there are two of bottom data blob behind each other in memory. e.g.:
   // batch size = 3: three times group 1 and then three times group 2: 123|123 for each input.
-  const int bottom_size = (this->num_ * this->channels_) / G;
+  const int bottom_size = (this->num_ * this->channels_);
 
   //                      num_output * num_images       = 96 * 1
-  const int output_size = (this->num_output_ * this->num_) / G;
+  const int output_size = (this->num_output_ * this->num_);
 
   const std::complex<Dtype> one_complex(1., 0.);
   const std::complex<Dtype> zero_complex(0., 0.);
@@ -569,16 +569,12 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
   const int group_offset_weight = weight_size / G;
   // the gorup offset_input is really huge because two groups are behind each other in memory where all inputs of a single group are behind each other.
   // so the offset is half the total size of the input. e.g.: 32x17x10x96/2 for conv2
-  const int group_offset_input = (H * W * bottom_size);
+  const int group_offset_input = bottom_size / this->num_ / G;
   //  const int group_offset_input = bottom_size / G;
-  const int group_offset_output = (H * W * output_size);
+  const int group_offset_output = output_size / this->num_ / G;
 
-//  const int M = this->num_output_ / G;
-//  const int N = this->num_;
-//  const int K = this->channels_ / this->group_;
-
-  const int M = this->num_; //this->num_output_ / G;
-  const int N = this->num_output_ / G; // this->num_;
+  const int M = this->num_;
+  const int N = this->num_output_ / G;
   const int K = this->channels_ / G;
 
   const std::complex<Dtype> **weight_arr = new const std::complex<Dtype> *[H*W*G];
@@ -587,12 +583,8 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
 
   int idx = 0;
 
-  //const int shape[] = {this->num_output_, this->channels_ / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1};
   for (int h = 0; h < H; ++h) {
     for (int w = 0; w < W; ++w) {
-
-      //((n * K + k) * H + h) * W + w
-
       const std::complex<Dtype> *weight = this->ffted_weights_ + (h * W + w ) * weight_size;
       const std::complex<Dtype> *input = this->ffted_bottom_data_ + (h * W + w ) * bottom_size;
       std::complex<Dtype> *output = fft_transposed_result + (h * W + w ) * output_size;
@@ -606,43 +598,55 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
     }
   }
 
+  // lda = K = 48
+  // ldb = K = 48
+  // ldc = N = 128
+
+  int lda = K * G; // 96
+  int ldb = K;
+  int ldc = N * G; // 256
   // Do batched matrix multiplication
   caffe_cpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasTrans, M, N, K,
-                                      &one_complex, input_arr, weight_arr, &zero_complex, output_arr, H*W*G);
+                                      &one_complex, input_arr, weight_arr, &zero_complex, output_arr, H*W*G, &lda, &ldb, &ldc);
 
   delete weight_arr;
   delete input_arr;
   delete output_arr;
 
-  const int shape_result[] = {H, W, this->num_, this->num_output_ / G};
+//  const int shape_result[] = {H, W, this->num_, this->num_output_ / G};
+//  const int permutation_result[] = {2, 3, 0, 1};
+//
+//  const int group_offset = (this->fft_complex_size_ * this->num_output_ * this->num_) / this->group_;
+//
+//  // permute per group.
+//  for (int g = 0; g < this->group_; ++g) {
+//    this->fft_permute_4d_cpu(fft_transposed_result + g * group_offset, this->ptwise_result_ + g * group_offset, shape_result, permutation_result);
+//  }
+//
+//  // reorganize group layout...
+//  if (this->group_ > 1) {
+//    //                                                    128 * 32 * 17
+//    const int group_size = (this->num_output_ / this->group_) * this->fft_complex_size_;
+//
+//    for (int n = 0; n < this->num_; ++n) {
+//      for (int g = 0; g < this->group_; ++g) {
+//        const int dst_idx = (n * this->group_  + g) * group_size;
+//        const int src_idx = (n + g * this->num_) * group_size;
+//
+//        memcpy(fft_transposed_result + dst_idx, this->ptwise_result_ + src_idx, group_size * sizeof(std::complex<Dtype>));
+//      }
+//    }
+//
+//    fft_cpu_free<Dtype>(this->ptwise_result_);
+//    this->ptwise_result_ = fft_transposed_result;
+//  } else  {
+  const int shape_result[] = {H, W, this->num_, this->num_output_};
   const int permutation_result[] = {2, 3, 0, 1};
 
-  const int group_offset = (this->fft_complex_size_ * this->num_output_ * this->num_) / this->group_;
+  this->fft_permute_4d_cpu(fft_transposed_result, this->ptwise_result_, shape_result, permutation_result);
 
-  // permute per group.
-  for (int g = 0; g < this->group_; ++g) {
-    this->fft_permute_4d_cpu(fft_transposed_result + g * group_offset, this->ptwise_result_ + g * group_offset, shape_result, permutation_result);
-  }
+  fft_cpu_free<Dtype>(fft_transposed_result);
 
-  // reorganize group layout...
-  if (this->group_ > 1) {
-    //                                                    128 * 32 * 17
-    const int group_size = (this->num_output_ / this->group_) * this->fft_complex_size_;
-
-    for (int n = 0; n < this->num_; ++n) {
-      for (int g = 0; g < this->group_; ++g) {
-        const int dst_idx = (n * this->group_  + g) * group_size;
-        const int src_idx = (n + g * this->num_) * group_size;
-
-        memcpy(fft_transposed_result + dst_idx, this->ptwise_result_ + src_idx, group_size * sizeof(std::complex<Dtype>));
-      }
-    }
-
-    fft_cpu_free<Dtype>(this->ptwise_result_);
-    this->ptwise_result_ = fft_transposed_result;
-  } else {
-    fft_cpu_free<Dtype>(fft_transposed_result);
-  }
 }
 
 
