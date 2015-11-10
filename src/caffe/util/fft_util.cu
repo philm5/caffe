@@ -434,77 +434,6 @@ template void fft_util_pointwise_multiply_npp_gpu<double>(std::vector<int> shape
                                                           const std::complex<double> *weight_complex,
                                                           std::complex<double> *ptwise_result);
 
-//template <typename Dtype>
-//void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
-//                                         const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result) {
-//  const int batch_size = shape[0];
-//  const int N = shape[1];
-//  const int K = shape[2];
-//  const int H = shape[3];
-//  const int W = shape[4];
-//  const int G = group;
-//
-//  // alloc data for result
-//  const int convolution_result_complex_size = H * W * N * sizeof(std::complex<Dtype>);
-//  std::complex<Dtype> *fft_transposed_result;
-//  CUDA_CHECK(cudaMalloc(&fft_transposed_result, convolution_result_complex_size));
-//
-//  //                      num_output * channels / group = 96 * 3
-//  const int weight_size = N * K;
-//
-//  //                      num_images      * channels    =  1 * 3
-//  const int bottom_size = batch_size * K * G;
-//
-//  //                      num_output * num_images       = 96 * 1
-//  const int output_size = N * batch_size;
-//
-//  std::complex<Dtype> one_complex(1., 0.);
-//  std::complex<Dtype> zero_complex(0., 0.);
-//
-//  const int group_offset_weight = weight_size / G;
-//  const int group_offset_input = bottom_size / batch_size / G;
-//  const int group_offset_output = output_size / batch_size / G;
-//
-//  const int M_gemm = batch_size;
-//  const int N_gemm = N / G;
-//  const int K_gemm = K;
-//
-//  const std::complex<Dtype> **weight_arr_gpu;
-//  CUDA_CHECK(cudaMalloc(&weight_arr_gpu, H*W*G*sizeof(std::complex<Dtype>)));
-//  const std::complex<Dtype> **input_arr_gpu;
-//  CUDA_CHECK(cudaMalloc(&input_arr_gpu, H*W*G*sizeof(std::complex<Dtype>)));
-//  std::complex<Dtype> **output_arr_gpu;
-//  CUDA_CHECK(cudaMalloc(&output_arr_gpu, H*W*G*sizeof(std::complex<Dtype>)));
-//
-//  dim3 block_num(G, (H*W / CAFFE_CUDA_NUM_THREADS) + 1);
-//  int thread_num = CAFFE_CUDA_NUM_THREADS;
-//
-//  fft_pointwise_multiply_gemm_construct_array_gpu_kernel<<<block_num, thread_num>>>
-//      (H, W, G, weight_complex, bottom_complex, fft_transposed_result, weight_size, bottom_size, output_size,
-//          group_offset_weight, group_offset_input, group_offset_output, weight_arr_gpu, input_arr_gpu, output_arr_gpu);
-//  CUDA_POST_KERNEL_CHECK;
-//
-//  int lda = K_gemm * G; // 96
-//  int ldb = K_gemm;
-//  int ldc = N_gemm * G; // 256
-//
-//  // Do batched matrix multiplication
-//  caffe_gpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasTrans, M_gemm, N_gemm, K_gemm,
-//                                      &one_complex, input_arr_gpu, weight_arr_gpu, &zero_complex, output_arr_gpu, H*W*G,
-//                                      &lda, &ldb, &ldc);
-//
-//  CUDA_CHECK(cudaFree(weight_arr_gpu));
-//  CUDA_CHECK(cudaFree(input_arr_gpu));
-//  CUDA_CHECK(cudaFree(output_arr_gpu));
-//
-//  // result_dim = 256 x 129 x 96 x 1 ==> 1 x 96 x 256 x 129
-//  const int shape_result[] = {H, W, N, batch_size};
-//  const int permutation_result[] = {2, 3, 0, 1};
-//  fft_util_permute_4d_gpu(fft_transposed_result, ptwise_result, shape_result, permutation_result);
-//  CUDA_CHECK(cudaFree(fft_transposed_result));
-//}
-
-// cublas stream
 template <typename Dtype>
 void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
                                          const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result) {
@@ -540,56 +469,126 @@ void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, con
   const int N_gemm = N / G;
   const int K_gemm = K;
 
-  int streams_number = H * W * G;
-  cudaStream_t stream[streams_number];
+  const std::complex<Dtype> **weight_arr_gpu;
+  CUDA_CHECK(cudaMalloc(&weight_arr_gpu, H*W*G*sizeof(std::complex<Dtype>)));
+  const std::complex<Dtype> **input_arr_gpu;
+  CUDA_CHECK(cudaMalloc(&input_arr_gpu, H*W*G*sizeof(std::complex<Dtype>)));
+  std::complex<Dtype> **output_arr_gpu;
+  CUDA_CHECK(cudaMalloc(&output_arr_gpu, H*W*G*sizeof(std::complex<Dtype>)));
 
-  for (int i = 0; i < streams_number; i++) {
-    CUDA_CHECK(cudaStreamCreate(&stream[i]));
-  }
+  dim3 block_num(G, (H*W / CAFFE_CUDA_NUM_THREADS) + 1);
+  int thread_num = CAFFE_CUDA_NUM_THREADS;
 
-  int idx = 0;
-  int lda = K_gemm * G;
+  fft_pointwise_multiply_gemm_construct_array_gpu_kernel<<<block_num, thread_num>>>
+      (H, W, G, weight_complex, bottom_complex, fft_transposed_result, weight_size, bottom_size, output_size,
+          group_offset_weight, group_offset_input, group_offset_output, weight_arr_gpu, input_arr_gpu, output_arr_gpu);
+  CUDA_POST_KERNEL_CHECK;
+
+  int lda = K_gemm * G; // 96
   int ldb = K_gemm;
-  int ldc = N_gemm * G;
+  int ldc = N_gemm * G; // 256
 
-  //const int shape[] = {this->num_output_, this->channels_ / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1};
-  for (int h = 0; h < H; ++h) {
-    for (int w = 0; w < W; ++w) {
+  // Do batched matrix multiplication
+  caffe_gpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasTrans, M_gemm, N_gemm, K_gemm,
+                                      &one_complex, input_arr_gpu, weight_arr_gpu, &zero_complex, output_arr_gpu, H*W*G,
+                                      &lda, &ldb, &ldc);
 
-      const std::complex<Dtype> *weight = weight_complex + (h * W + w ) * weight_size;
-      const std::complex<Dtype> *input = bottom_complex + (h * W + w ) * bottom_size;
-      std::complex<Dtype> *output = fft_transposed_result + (h * W + w ) * output_size;
+  CUDA_CHECK(cudaFree(weight_arr_gpu));
+  CUDA_CHECK(cudaFree(input_arr_gpu));
+  CUDA_CHECK(cudaFree(output_arr_gpu));
 
-      for (int g = 0; g < G; ++g) {
-
-        const std::complex<Dtype> *weight_g = weight + g * group_offset_weight;
-        const std::complex<Dtype> *input_g = input + g * group_offset_input;
-        std::complex<Dtype> *output_g = output + g * group_offset_output;
-
-        cublasSetStream(Caffe::cublas_handle(), stream[idx]);
-        caffe_gpu_gemm_complex<Dtype>(CblasNoTrans, CblasTrans, M_gemm, N_gemm, K_gemm, &one_complex, input_g,
-                                      weight_g, &zero_complex, output_g, &lda, &ldb, &ldc);
-        ++idx;
-      }
-    }
-  }
-
-  LOG(ERROR) << "called cgemm";
-
-  // set back to std stream.
-  cublasSetStream(Caffe::cublas_handle(), NULL);
-
-  for (int i = 0; i < streams_number; i++) {
-    CUDA_CHECK(cudaStreamDestroy(stream[i]));
-  }
-
-
-  // result_dim = 256 x 129 x 96 x 10 ==> 96 x 10 x 256 x 129
+  // result_dim = 256 x 129 x 96 x 1 ==> 1 x 96 x 256 x 129
   const int shape_result[] = {H, W, N, batch_size};
   const int permutation_result[] = {2, 3, 0, 1};
-  fft_util_permute_4d_gpu(fft_transposed_result, ptwise_result, shape_result, permutation_result);
+  fft_util_geam_transpose_gpu(fft_transposed_result, ptwise_result, shape_result, 2);
+  // fft_util_permute_4d_gpu(fft_transposed_result, ptwise_result, shape_result, permutation_result);
   CUDA_CHECK(cudaFree(fft_transposed_result));
 }
+
+// cublas stream
+//template <typename Dtype>
+//void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
+//                                         const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result) {
+//  const int batch_size = shape[0];
+//  const int N = shape[1];
+//  const int K = shape[2];
+//  const int H = shape[3];
+//  const int W = shape[4];
+//  const int G = group;
+//
+//  // alloc data for result
+//  const int convolution_result_complex_size = batch_size * H * W * N * sizeof(std::complex<Dtype>);
+//  std::complex<Dtype> *fft_transposed_result;
+//  CUDA_CHECK(cudaMalloc(&fft_transposed_result, convolution_result_complex_size));
+//
+//  //                      num_output * channels / group = 96 * 3
+//  const int weight_size = N * K;
+//
+//  //                      num_images      * channels    =  1 * 3
+//  const int bottom_size = batch_size * K * G;
+//
+//  //                      num_output * num_images       = 96 * 1
+//  const int output_size = N * batch_size;
+//
+//  std::complex<Dtype> one_complex(1., 0.);
+//  std::complex<Dtype> zero_complex(0., 0.);
+//
+//  const int group_offset_weight = weight_size / G;
+//  const int group_offset_input = bottom_size / batch_size / G;
+//  const int group_offset_output = output_size / batch_size / G;
+//
+//  const int M_gemm = batch_size;
+//  const int N_gemm = N / G;
+//  const int K_gemm = K;
+//
+//  int streams_number = H * W * G;
+//  cudaStream_t stream[streams_number];
+//
+//  for (int i = 0; i < streams_number; i++) {
+//    CUDA_CHECK(cudaStreamCreate(&stream[i]));
+//  }
+//
+//  int idx = 0;
+//  int lda = K_gemm * G;
+//  int ldb = K_gemm;
+//  int ldc = N_gemm * G;
+//
+//  //const int shape[] = {this->num_output_, this->channels_ / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1};
+//  for (int h = 0; h < H; ++h) {
+//    for (int w = 0; w < W; ++w) {
+//
+//      const std::complex<Dtype> *weight = weight_complex + (h * W + w ) * weight_size;
+//      const std::complex<Dtype> *input = bottom_complex + (h * W + w ) * bottom_size;
+//      std::complex<Dtype> *output = fft_transposed_result + (h * W + w ) * output_size;
+//
+//      for (int g = 0; g < G; ++g) {
+//
+//        const std::complex<Dtype> *weight_g = weight + g * group_offset_weight;
+//        const std::complex<Dtype> *input_g = input + g * group_offset_input;
+//        std::complex<Dtype> *output_g = output + g * group_offset_output;
+//
+//        cublasSetStream(Caffe::cublas_handle(), stream[idx]);
+//        caffe_gpu_gemm_complex<Dtype>(CblasNoTrans, CblasTrans, M_gemm, N_gemm, K_gemm, &one_complex, input_g,
+//                                      weight_g, &zero_complex, output_g, &lda, &ldb, &ldc);
+//        ++idx;
+//      }
+//    }
+//  }
+//
+//  // set back to std stream.
+//  cublasSetStream(Caffe::cublas_handle(), NULL);
+//
+//  for (int i = 0; i < streams_number; i++) {
+//    CUDA_CHECK(cudaStreamDestroy(stream[i]));
+//  }
+//
+//
+//  // result_dim = 256 x 129 x 96 x 10 ==> 96 x 10 x 256 x 129
+//  const int shape_result[] = {H, W, N, batch_size};
+//  const int permutation_result[] = {2, 3, 0, 1};
+//  fft_util_permute_4d_gpu(fft_transposed_result, ptwise_result, shape_result, permutation_result);
+//  CUDA_CHECK(cudaFree(fft_transposed_result));
+//}
 
 template void fft_util_pointwise_multiply_gemm_gpu<float>(std::vector<int> shape, int group,
                                                           const std::complex<float> *bottom_complex,
@@ -631,6 +630,37 @@ template void fft_util_normalize_gpu<double>(std::vector<int> shape, const int k
                                             const int kernel_w, const int stride_h, const int stride_w,
                                             float normalize_factor, int fft_height, int fft_width,
                                             const double *conv_result_real, double *top_data);
+
+template <typename Dtype>
+void fft_util_geam_transpose_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
+                                 const int shape[4], const int sep) {
+  // idea taken from fbfft paper.
+
+  int rows = 1;
+  int cols = 1;
+
+  for (int i = 0; i < sep; i++) {
+    rows *= shape[i];
+  }
+
+
+  for (int i = sep; i < 4; i++) {
+    cols *= shape[i];
+  }
+
+
+  std::complex<Dtype> one_complex(1., 0.);
+  std::complex<Dtype> zero_complex(0., 0.);
+
+  caffe_gpu_geam_complex<Dtype>(CblasTrans, CblasNoTrans, rows, cols, &one_complex, in, cols,
+                                NULL, &zero_complex, rows, out, rows);
+}
+
+template void fft_util_geam_transpose_gpu<float>(const std::complex<float> *in, std::complex<float> *out,
+                                                 const int shape[4], const int sep);
+
+template void fft_util_geam_transpose_gpu<double>(const std::complex<double> *in, std::complex<double> *out,
+                                                 const int shape[4], const int sep);
 
 template <typename Dtype>
 void fft_util_permute_4d_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,

@@ -270,8 +270,8 @@ int main(int argc, char** argv) {
 
   std::vector<std::pair<std::vector<Prediction>, double> > cls_time;
 
-  // do 1000 classifications:
-  for (size_t i = 0; i < 10; ++i) {
+  // do 30 classifications:
+  for (size_t i = 0; i < 30; ++i) {
     double start_time = cpu_time();
     std::vector<Prediction> predictions = classifier.Classify(img);
     double end_time = cpu_time();

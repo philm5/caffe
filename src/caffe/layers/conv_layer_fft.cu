@@ -18,7 +18,7 @@ namespace caffe {
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                                              const vector<Blob<Dtype>*>& top) {
-  if (this->layer_param().name() == "conv2") {
+  if (this->layer_param().name() != "conv1") {
     this->fft_on_ = true;
   }
 
@@ -87,7 +87,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft_single(const Dtype *bottom,
   cudaEventSynchronize(fft_set_up);
 #endif
 
-    caffe_gpu_memset(this->padded_bottom_complex_size_, 0., this->ffted_bottom_data_gpu_);
+    // caffe_gpu_memset(this->padded_bottom_complex_size_, 0., this->ffted_bottom_data_gpu_);
 
 #ifdef DBG_OUTPUT
     cudaEventRecord(alloc_bottom, 0);
@@ -150,7 +150,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 
 	cufftHandle plan;
 	fft_gpu_plan_many_dft_r2c_2d<Dtype>(&plan, this->fft_height_, this->fft_width_, this->num_weights_);
-	caffe_gpu_memset(this->padded_weights_complex_size_, 0., this->ffted_weights_);
+	// caffe_gpu_memset(this->padded_weights_complex_size_, 0., this->ffted_weights_);
 
 	fft_gpu_execute_plan_r2c<Dtype>(plan, padded_real_weights_gpu, this->ffted_weights_);
 //	this->mem_info_gpu();
@@ -186,10 +186,8 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 
   const int weight_shape[] = { this->num_output_, this->channels_
       / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1 };
-  const int permutation[] = { 2, 3, 0, 1 };
 
-  fft_util_permute_4d_gpu<Dtype>(this->ffted_weights_, transposed_weights,
-                                 weight_shape, permutation);
+  fft_util_geam_transpose_gpu<Dtype>(this->ffted_weights_, transposed_weights, weight_shape, 2);
   CUDA_CHECK(cudaFree(this->ffted_weights_));
   this->ffted_weights_ = transposed_weights;
 #endif
@@ -235,8 +233,8 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom) {
   std::complex<Dtype> *fft_transposed_bottom;
   CUDA_CHECK(cudaMalloc(&fft_transposed_bottom, this->padded_bottom_complex_size_));
   const int shape_bottom[] = {this->num_, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
-  const int permutation_bottom[] = {2, 3, 0, 1};
-  fft_util_permute_4d_gpu(this->ffted_bottom_data_gpu_, fft_transposed_bottom, shape_bottom, permutation_bottom);
+  // const int permutation_bottom[] = {2, 3, 0, 1};
+  fft_util_geam_transpose_gpu(this->ffted_bottom_data_gpu_, fft_transposed_bottom, shape_bottom, 2);
   CUDA_CHECK(cudaFree(this->ffted_bottom_data_gpu_));
   this->ffted_bottom_data_gpu_ = fft_transposed_bottom;
 #endif
@@ -267,7 +265,7 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(Dtype *top) {
   cudaEventRecord(start, 0);
 #endif
   // alloc data for pointwise multiplication result (with channels added up) and set memory to 0
-  caffe_gpu_memset(this->convolution_result_complex_size_, 0., this->ptwise_result_gpu_);
+  // caffe_gpu_memset(this->convolution_result_complex_size_, 0., this->ptwise_result_gpu_);
 
 #ifdef DBG_OUTPUT
   cudaEventRecord(memset, 0);

@@ -171,6 +171,13 @@ void caffe_gpu_gemm(const CBLAS_TRANSPOSE TransA,
     Dtype* C);
 
 template <typename Dtype>
+void caffe_gpu_geam_complex(const CBLAS_TRANSPOSE TransA,
+                            const CBLAS_TRANSPOSE TransB, const int M, const int N,
+                            const std::complex<Dtype> *alpha, const std::complex<Dtype> *A, int lda,
+                            const std::complex<Dtype> *B, const std::complex<Dtype> *beta, int ldb,
+                            std::complex<Dtype> *C, int ldc);
+
+template <typename Dtype>
 void caffe_gpu_gemm_complex(const CBLAS_TRANSPOSE TransA,
                             const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
                             const std::complex<Dtype> *alpha, const std::complex<Dtype> *A, const std::complex<Dtype> *B,

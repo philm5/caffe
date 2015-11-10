@@ -45,6 +45,42 @@ void caffe_gpu_gemm<double>(const CBLAS_TRANSPOSE TransA,
 }
 
 template <>
+void caffe_gpu_geam_complex<float>(const CBLAS_TRANSPOSE TransA,
+                                   const CBLAS_TRANSPOSE TransB, const int M, const int N,
+                                   const std::complex<float> *alpha, const std::complex<float> *A, int lda,
+                                   const std::complex<float> *B, const std::complex<float> *beta, int ldb,
+                                   std::complex<float> *C, int ldc) {
+
+  cublasOperation_t cuTransA =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  cublasOperation_t cuTransB =
+      (TransB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+
+  CUBLAS_CHECK(cublasCgeam(Caffe::cublas_handle(), cuTransA, cuTransB, M, N,
+                           reinterpret_cast<const cuComplex *>(alpha), reinterpret_cast<const cuComplex *>(A), lda,
+                           reinterpret_cast<const cuComplex *>(beta), reinterpret_cast<const cuComplex *>(B), ldb,
+                           reinterpret_cast<cuComplex *>(C), ldc));
+}
+
+template <>
+void caffe_gpu_geam_complex<double>(const CBLAS_TRANSPOSE TransA,
+                                    const CBLAS_TRANSPOSE TransB, const int M, const int N,
+                                    const std::complex<double> *alpha, const std::complex<double> *A, int lda,
+                                    const std::complex<double> *B, const std::complex<double> *beta, int ldb,
+                                    std::complex<double> *C, int ldc) {
+
+  cublasOperation_t cuTransA =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  cublasOperation_t cuTransB =
+      (TransB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+
+  CUBLAS_CHECK(cublasZgeam(Caffe::cublas_handle(), cuTransA, cuTransB, M, N,
+                           reinterpret_cast<const cuDoubleComplex *>(alpha), reinterpret_cast<const cuDoubleComplex *>(A), lda,
+                           reinterpret_cast<const cuDoubleComplex *>(beta), reinterpret_cast<const cuDoubleComplex *>(B), ldb,
+                           reinterpret_cast<cuDoubleComplex *>(C), ldc));
+}
+
+template <>
 void caffe_gpu_gemm_complex<float>(const CBLAS_TRANSPOSE TransA,
                                    const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
                                    const std::complex<float> *alpha, const std::complex<float> *A, const std::complex<float> *B,

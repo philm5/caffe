@@ -113,6 +113,10 @@ void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,
                             const Dtype *conv_result_real, Dtype *top_data);
 
 template <typename Dtype>
+void fft_util_geam_transpose_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
+                                 const int shape[4], const int sep);
+
+template <typename Dtype>
 void fft_util_permute_4d_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
                              const int shape[4], const int permutation[4]);
 #endif
