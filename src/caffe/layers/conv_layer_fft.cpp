@@ -598,10 +598,6 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
     }
   }
 
-  // lda = K = 48
-  // ldb = K = 48
-  // ldc = N = 128
-
   int lda = K * G; // 96
   int ldb = K;
   int ldc = N * G; // 256

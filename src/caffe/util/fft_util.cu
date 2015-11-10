@@ -442,6 +442,7 @@ template void fft_util_pointwise_multiply_npp_gpu<double>(std::vector<int> shape
 //  const int K = shape[2];
 //  const int H = shape[3];
 //  const int W = shape[4];
+//  const int G = group;
 //
 //  // alloc data for result
 //  const int convolution_result_complex_size = H * W * N * sizeof(std::complex<Dtype>);
@@ -452,7 +453,7 @@ template void fft_util_pointwise_multiply_npp_gpu<double>(std::vector<int> shape
 //  const int weight_size = N * K;
 //
 //  //                      num_images      * channels    =  1 * 3
-//  const int bottom_size = batch_size * K * group;
+//  const int bottom_size = batch_size * K * G;
 //
 //  //                      num_output * num_images       = 96 * 1
 //  const int output_size = N * batch_size;
@@ -460,14 +461,12 @@ template void fft_util_pointwise_multiply_npp_gpu<double>(std::vector<int> shape
 //  std::complex<Dtype> one_complex(1., 0.);
 //  std::complex<Dtype> zero_complex(0., 0.);
 //
-//  const int G = group;
-//
 //  const int group_offset_weight = weight_size / G;
-//  const int group_offset_input = bottom_size / G;
-//  const int group_offset_output = output_size / G;
+//  const int group_offset_input = bottom_size / batch_size / G;
+//  const int group_offset_output = output_size / batch_size / G;
 //
-//  const int M_gemm = N / G;
-//  const int N_gemm = batch_size;
+//  const int M_gemm = batch_size;
+//  const int N_gemm = N / G;
 //  const int K_gemm = K;
 //
 //  const std::complex<Dtype> **weight_arr_gpu;
@@ -485,9 +484,14 @@ template void fft_util_pointwise_multiply_npp_gpu<double>(std::vector<int> shape
 //          group_offset_weight, group_offset_input, group_offset_output, weight_arr_gpu, input_arr_gpu, output_arr_gpu);
 //  CUDA_POST_KERNEL_CHECK;
 //
+//  int lda = K_gemm * G; // 96
+//  int ldb = K_gemm;
+//  int ldc = N_gemm * G; // 256
+//
 //  // Do batched matrix multiplication
 //  caffe_gpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasTrans, M_gemm, N_gemm, K_gemm,
-//                                      &one_complex, weight_arr_gpu, input_arr_gpu, &zero_complex, output_arr_gpu, H*W*G);
+//                                      &one_complex, input_arr_gpu, weight_arr_gpu, &zero_complex, output_arr_gpu, H*W*G,
+//                                      &lda, &ldb, &ldc);
 //
 //  CUDA_CHECK(cudaFree(weight_arr_gpu));
 //  CUDA_CHECK(cudaFree(input_arr_gpu));
@@ -509,6 +513,7 @@ void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, con
   const int K = shape[2];
   const int H = shape[3];
   const int W = shape[4];
+  const int G = group;
 
   // alloc data for result
   const int convolution_result_complex_size = batch_size * H * W * N * sizeof(std::complex<Dtype>);
@@ -519,7 +524,7 @@ void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, con
   const int weight_size = N * K;
 
   //                      num_images      * channels    =  1 * 3
-  const int bottom_size = batch_size * K * group;
+  const int bottom_size = batch_size * K * G;
 
   //                      num_output * num_images       = 96 * 1
   const int output_size = N * batch_size;
@@ -527,22 +532,25 @@ void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, con
   std::complex<Dtype> one_complex(1., 0.);
   std::complex<Dtype> zero_complex(0., 0.);
 
-  const int G = group;
-
   const int group_offset_weight = weight_size / G;
-  const int group_offset_input = bottom_size / G;
-  const int group_offset_output = output_size / G;
+  const int group_offset_input = bottom_size / batch_size / G;
+  const int group_offset_output = output_size / batch_size / G;
 
-  const int M_gemm = N / G;
-  const int N_gemm = batch_size;
+  const int M_gemm = batch_size;
+  const int N_gemm = N / G;
   const int K_gemm = K;
 
-  int streams_number = H; //* W * G;
+  int streams_number = H * W * G;
   cudaStream_t stream[streams_number];
 
   for (int i = 0; i < streams_number; i++) {
     CUDA_CHECK(cudaStreamCreate(&stream[i]));
   }
+
+  int idx = 0;
+  int lda = K_gemm * G;
+  int ldb = K_gemm;
+  int ldc = N_gemm * G;
 
   //const int shape[] = {this->num_output_, this->channels_ / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1};
   for (int h = 0; h < H; ++h) {
@@ -558,9 +566,10 @@ void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, con
         const std::complex<Dtype> *input_g = input + g * group_offset_input;
         std::complex<Dtype> *output_g = output + g * group_offset_output;
 
-        cublasSetStream(Caffe::cublas_handle(), stream[h]);
-        caffe_gpu_gemm_complex<Dtype>(CblasNoTrans, CblasTrans, M_gemm, N_gemm, K_gemm, &one_complex, weight_g,
-                                      input_g, &zero_complex, output_g);
+        cublasSetStream(Caffe::cublas_handle(), stream[idx]);
+        caffe_gpu_gemm_complex<Dtype>(CblasNoTrans, CblasTrans, M_gemm, N_gemm, K_gemm, &one_complex, input_g,
+                                      weight_g, &zero_complex, output_g, &lda, &ldb, &ldc);
+        ++idx;
       }
     }
   }

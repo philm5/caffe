@@ -1,7 +1,7 @@
 clear;
 
-file1 = 'res_top_fft.cu_conv1.txt@';
-file2 = 'res_top_fft.cpp_conv1.txt';
+file1 = 'gemm_g1';
+file2 = 'simple_g1';
 
 id_gpu = fopen(file1);
 tmp = textscan(id_gpu, '%f + %f * i');

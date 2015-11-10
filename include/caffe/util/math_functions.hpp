@@ -174,14 +174,14 @@ template <typename Dtype>
 void caffe_gpu_gemm_complex(const CBLAS_TRANSPOSE TransA,
                             const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
                             const std::complex<Dtype> *alpha, const std::complex<Dtype> *A, const std::complex<Dtype> *B,
-                            const std::complex<Dtype> *beta, std::complex<Dtype> *C);
+                            const std::complex<Dtype> *beta, std::complex<Dtype> *C, int *lda = NULL, int *ldb = NULL, int *ldc = NULL);
 
 template <typename Dtype>
 void caffe_gpu_gemm_complex_batch(const CBLAS_TRANSPOSE TransA,
                                   const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
                                   const std::complex<Dtype> *alpha, const std::complex<Dtype> **A_arr,
                                   const std::complex<Dtype> **B_arr, const std::complex<Dtype> *beta,
-                                  std::complex<Dtype> **C_arr, int batch_size);
+                                  std::complex<Dtype> **C_arr, int batch_size, int *lda = NULL, int *ldb = NULL, int *ldc = NULL);
 
 template <typename Dtype>
 void caffe_gpu_gemv(const CBLAS_TRANSPOSE TransA, const int M, const int N,
