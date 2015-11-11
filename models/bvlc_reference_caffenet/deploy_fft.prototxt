@@ -10,7 +10,6 @@ layer {
   bottom: "data"
   top: "conv1"
   convolution_param {
-    engine: FFT
     num_output: 96
     kernel_size: 11
     stride: 4

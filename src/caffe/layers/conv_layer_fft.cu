@@ -18,9 +18,7 @@ namespace caffe {
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                                              const vector<Blob<Dtype>*>& top) {
-  if (this->layer_param().name() != "conv1") {
-    this->fft_on_ = true;
-  }
+  this->fft_on_ = true;
 
   if (this->fft_on_) {
     this->Forward_gpu_fft(bottom, top);

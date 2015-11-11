@@ -26,9 +26,7 @@ ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                                              const vector<Blob<Dtype>*>& top) {
-  if (this->layer_param().name() == "conv2") {
-    this->fft_on_ = true;
-  }
+  this->fft_on_ = true;
 
   if (this->fft_on_) {
     this->Forward_cpu_fft(bottom, top);
