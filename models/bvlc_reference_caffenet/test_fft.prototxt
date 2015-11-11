@@ -4,9 +4,9 @@ layer {
   type: "Data"
   top: "data"
   top: "label"
-  include {
-    phase: TEST
-  }
+#  include {
+#    phase: TEST
+#  }
   transform_param {
     mirror: false
     crop_size: 227
@@ -21,7 +21,7 @@ layer {
 #    mirror: true
 #  }
   data_param {
-    source: "/data/share/ILSVRC2012/LMDB/256x256/train"
+    source: "/data/share/ILSVRC2012/LMDB/256x256/val"
     batch_size: 500
     backend: LMDB
   }
@@ -232,8 +232,12 @@ layer {
   }
 }
 layer {
-  name: "prob"
-  type: "Softmax"
+  name: "accuracy"
+  type: "Accuracy"
   bottom: "fc8"
-  top: "prob"
+  bottom: "label"
+  top: "accuracy"
+  #include {
+  #  phase: TEST
+  #}
 }
