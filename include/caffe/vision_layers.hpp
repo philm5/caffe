@@ -191,12 +191,13 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
  public:
-  explicit ConvolutionLayerFFT(const LayerParameter& param)
+  explicit ConvolutionLayerFFT(const LayerParameter& param, bool test_mode = false)
       : ConvolutionLayer<Dtype>(param),
         fft_initialized_(false),
         fft_cpu_initialized_(false),
         fft_gpu_initialized_(false),
-        fft_on_(false) {}
+        fft_on_(true),
+        test_mode_ (test_mode) {}
   virtual ~ConvolutionLayerFFT();
  protected:
   /**
@@ -204,6 +205,11 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
    */
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                            const vector<Blob<Dtype>*>& top);
+
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+                            const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+
+  virtual void Backward_cpu_fft(const Dtype* input, Dtype* output);
 
   virtual void Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
                                const vector<Blob<Dtype>*>& top);
@@ -218,7 +224,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void fft_free_weights_cpu();
 
   virtual void pad_real_blob(std::vector<int> shape, const Dtype *blob_data, Dtype *padded_data,
-                             int pad_h = 0, int pad_w = 0, bool flip = false);
+                             int pad_h = 0, int pad_w = 0, bool flip = false, int stride_h = 1, int stride_w = 1);
 
   virtual void fft_set_up_cpu();
 
@@ -229,11 +235,11 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_convolve_cpu(Dtype *top);
 
-  virtual void fft_pointwise_multiply_cpu();
+  virtual void fft_pointwise_multiply_cpu(bool backward_pass = false);
 
   virtual void fft_pointwise_multiply_ipp_cpu();
 
-  virtual void fft_pointwise_multiply_gemm_cpu();
+  virtual void fft_pointwise_multiply_gemm_cpu(bool backward_pass = false);
 
   virtual void fft_normalize_cpu(Dtype *top_data);
 
@@ -288,6 +294,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   bool fft_initialized_;
   bool fft_cpu_initialized_;
   bool fft_gpu_initialized_;
+  bool test_mode_;
 
   int fft_height_;
   int fft_width_;
@@ -299,6 +306,8 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   size_t padded_weights_complex_size_;
   size_t padded_bottom_real_size_;
   size_t padded_bottom_complex_size_;
+  size_t padded_top_real_size_;
+  size_t padded_top_complex_size_;
   size_t convolution_result_real_size_;
   size_t convolution_result_complex_size_;
 

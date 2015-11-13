@@ -36,9 +36,169 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 }
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+  this->fft_on_ = true;
+  this->fft_set_up();
+
+  const Dtype* weight = this->blobs_[0]->cpu_data();
+  Dtype* weight_diff = this->blobs_[0]->mutable_cpu_diff();
+  for (int i = 0; i < top.size(); ++i) {
+    const Dtype* top_diff = top[i]->cpu_diff();
+    const Dtype* bottom_data = bottom[i]->cpu_data();
+    Dtype* bottom_diff = bottom[i]->mutable_cpu_diff();
+    // Bias gradient, if necessary.
+    if (this->bias_term_ && this->param_propagate_down_[1]) {
+      Dtype* bias_diff = this->blobs_[1]->mutable_cpu_diff();
+      for (int n = 0; n < this->num_; ++n) {
+        this->backward_cpu_bias(bias_diff, top_diff + top[i]->offset(n));
+      }
+    }
+    if (this->param_propagate_down_[0] || propagate_down[i]) {
+      for (int n = 0; n < this->num_; ++n) {
+        // gradient w.r.t. weight. Note that we will accumulate diffs.
+        if (this->param_propagate_down_[0]) {
+          this->weight_cpu_gemm(bottom_data + bottom[i]->offset(n),
+              top_diff + top[i]->offset(n), weight_diff);
+        }
+        // gradient w.r.t. bottom data, if necessary.
+        if (propagate_down[i]) {
+          if (!this->fft_on_) {
+            this->backward_cpu_gemm(top_diff + top[i]->offset(n), weight,
+                bottom_diff + bottom[i]->offset(n));
+          }
+        }
+      }
+      // gradient w.r.t. bottom data, if necessary.
+      if (propagate_down[i]) {
+        if (this->fft_on_) {
+          this->Backward_cpu_fft(top_diff + top[i]->offset(0),
+                                 bottom_diff + bottom[i]->offset(0));
+        }
+      }
+    }
+  }
+}
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Backward_cpu_fft(const Dtype* top_blob, Dtype* bottom_blob) {
+  // input is top diff here. ; no batching yet!
+  // LOG(ERROR) << this->layer_param_.name();
+  // this->fft_free_weights_cpu();
+  this->fft_set_up();
+
+  std::vector<int> top_shape;
+  top_shape.push_back(this->num_);
+  top_shape.push_back(this->num_output_);
+  top_shape.push_back(this->height_out_);
+  top_shape.push_back(this->width_out_);
+
+  Dtype *padded_real_top =
+      reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->convolution_result_real_size_));
+
+  caffe_memset(this->convolution_result_real_size_, (Dtype) 0., fft_convolution_result_real_);
+  // now pad the top data (do normalize backwards) apply kernel as pad. and use stride. the rest is 0.
+  this->pad_real_blob(top_shape, top_blob, this->fft_convolution_result_real_, 0, 0, false, this->stride_h_, this->stride_w_);
+
+//  std::complex<Dtype> *padded_complex_top =
+//      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_top_complex_size_));
+
+  this->fft_bottom_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
+                                                               this->fft_width_,
+                                                               this->num_output_ * this->num_,
+                                                               this->fft_convolution_result_real_,
+                                                               this->ptwise_result_,
+                                                               FFTW_ESTIMATE);
+
+  fft_cpu_execute_plan<Dtype>(this->fft_bottom_plan_);
+
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  // transpose input if cgemm pt-wise product should be done
+  std::complex<Dtype> *fft_transposed_top =
+      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
+
+
+  const int shape_bottom[] = {this->num_, this->num_output_, this->fft_height_, (this->fft_width_ / 2) + 1};
+  const int permutation_bottom[] = {2, 3, 0, 1};
+  this->fft_permute_4d_cpu(this->ptwise_result_, fft_transposed_top, shape_bottom, permutation_bottom);
+
+  fft_cpu_free<Dtype>(this->ptwise_result_);
+  this->ptwise_result_ = fft_transposed_top;
+#endif
+
+  // now pointwise multiply. (since we have to flip weights in the backward pass [in contrast to the fw pass] and the weights were already flipped
+  // for the fw to do a cross-correlation instead of convolution, we have to do a convolution here. this can be achieved by doing a cross-correlation of the flipped
+  // weight. Confused?? See here:
+  // FW Pass (cross-correlation, but fft-pointwise-mult is a convolution. --> flip weights; pointwise-mult is now cross-correlation)
+  // BW Pass (conv, but weights are flipped [see above] --> do cross correlation: fft for correlation requires conjugate (fft_of_weights)
+  caffe_memset(padded_bottom_complex_size_, (Dtype) 0., this->ffted_bottom_data_);
+
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_IPP
+#warning no ipp
+#elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
+  this->fft_pointwise_multiply_cpu(true);
+#elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  this->fft_pointwise_multiply_gemm_cpu(true);
+#endif
+
+  this->ifft_plan_ = fft_cpu_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
+                                                         this->fft_width_,
+                                                         this->channels_ * this->num_,
+                                                         this->ffted_bottom_data_,
+                                                         this->padded_real_bottom_,
+                                                         FFTW_ESTIMATE);
+
+  fft_cpu_execute_plan<Dtype>(this->ifft_plan_);
+  Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
+
+  // now depad into bottom_blob
+
+  const int N = this->num_;
+  const int K = this->channels_;
+  const int H = this->height_;
+  const int W = this->width_;
+  //#ifdef _OPENMP
+  //#pragma omp parallel for
+  //#endif
+  for (int n = 0; n < N; n++) {
+    for (int k = 0; k < K; k++) {
+      for (int h = 0; h < H; h++) {
+        for (int w = 0; w < W; w++) {
+          // ((n * ch_gr + c) * fft_height_ + h)* 2 * (fft_width_ / 2 + 1) + w
+          const int offset_weight_real = (n * K + k) * this->fft_real_size_;
+          // e.g. a 3x3 filter should fit into a 5x5 because the image size is 5x5 (here the stride is 1)
+          // <--W-->
+          // ^ f f f 0 0
+          // H f f f 0 0
+          // _ f f f 0 0
+          //   0 0 0 0 0
+          //   0 0 0 0 0
+
+          const int idx_weight_real = offset_weight_real + (h + this->pad_h_ ) * this->fft_width_ + (w + this->pad_w_);
+          // copy each weight into the fft_weights_in_real_
+          // get ptr to blob data. indexing see: http://caffe.berkeleyvision.org/tutorial/net_layer_blob.html
+          // Blob memory is row-major in layout, so the last / rightmost dimension changes fastest. For example,
+          // in a 4D blob, the value at index (n, k, h, w) is physically located at index ((n * K + k) * H + h) * W + w.
+          // 96 x 3 x 11 x 11 (num_output_, channels_ / group_, kernel_height, width_)
+
+          // if flip = true ==> flip the indices of the weights. Caffe actually does not a convolution but a
+          // a cross-correlation according to: https://github.com/BVLC/caffe/issues/2513
+          const int h_idx = h;
+          const int w_idx = w;
+          const int idx_weight_in_blob = ((n * K + k) * H + h_idx) * W + w_idx;
+
+          bottom_blob[idx_weight_in_blob] = this->padded_real_bottom_[idx_weight_real] * ifft_normalize_factor;
+        }
+      }
+    }
+  }
+
+  //this->fft_free_weights_cpu();
+}
+
+template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu_normal(const vector<Blob<Dtype>*>& bottom,
                                                  const vector<Blob<Dtype>*>& top) {
-
   const Dtype *weight = this->blobs_[0]->cpu_data();
 
   for (int i = 0; i < bottom.size(); ++i) {
@@ -59,6 +219,15 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_normal(const vector<Blob<Dtype>*>& 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
                                                       const vector<Blob<Dtype>*>& top) {
+  // the unit tests modify weights between two Forward ops by step_size to check if backward calculates the gradient correctly.
+  // But since the weights are only ffted once to save compute power, changes arent reflected in the complex values (ffted ones).
+  // If test mode is on, the weights are ffted every pass!!! Costs extra computing effort if done.
+  if (this->test_mode_) {
+    this->fft_free_weights_cpu();
+  }
+  this->fft_set_up();
+
+
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->cpu_data();
     Dtype* top_data = top[i]->mutable_cpu_data();
@@ -84,13 +253,11 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
       }
     }
   }
-
 }
 
   template <typename Dtype>
   void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Dtype *bottom,
                                                           Dtype *top) {
-    this->fft_set_up();
 #ifdef DBG_OUTPUT
     double set_up_time = cpu_time();
 #endif
@@ -136,19 +303,24 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
     int w_to_check = this->width_ + std::max(2 * this->pad_w_, (this->kernel_w_ - 1));
     int h_to_check = this->height_ + std::max(2 * this->pad_h_, (this->kernel_h_ - 1));
 
-    if (!check_power_of_2(w_to_check)) {
-      this->fft_width_ = next_power_of_2(w_to_check);
-    }
-    else {
-      this->fft_width_ = w_to_check;
-    }
+    if ((h_to_check % 16) > 0)
+      fft_height_ = h_to_check + (16 - (h_to_check % 16));
+    if ((w_to_check % 16) > 0)
+      fft_width_ = w_to_check + (16 - (w_to_check % 16));
 
-    if (!check_power_of_2(h_to_check)) {
-      this->fft_height_ = next_power_of_2(h_to_check);
-    }
-    else {
-      this->fft_height_ = h_to_check;
-    }
+//    if (!check_power_of_2(w_to_check)) {
+//      this->fft_width_ = next_power_of_2(w_to_check);
+//    }
+//    else {
+//      this->fft_width_ = w_to_check;
+//    }
+//
+//    if (!check_power_of_2(h_to_check)) {
+//      this->fft_height_ = next_power_of_2(h_to_check);
+//    }
+//    else {
+//      this->fft_height_ = h_to_check;
+//    }
 
     // Calculate the size of the fft 2D matrices.
     // for sizes see: http://www.fftw.org/doc/Multi_002dDimensional-DFTs-of-Real-Data.html
@@ -226,7 +398,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_cpu() {
 
   // weights do not have to be padded (only 0-padded). But the weights have to be flipped, since the convolution is actually a
   // cross-correlation.
-  this->pad_real_blob(shape, weight_data, padded_real_weights, 0, 0, true);
+  this->pad_real_blob(shape, weight_data, padded_real_weights, 0, 0, false);
 
   // The plan for fft of the weights
   // TODO: Do inplace fft to save memory???
@@ -328,15 +500,18 @@ void ConvolutionLayerFFT<Dtype>::fft_permute_4d_cpu(const std::complex<Dtype> *i
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_free_weights_cpu() {
+  if (this->fft_initialized_) {
+    fft_cpu_free<Dtype>(this->ffted_weights_);
+    fft_cpu_free<Dtype>(this->padded_real_bottom_);
+    fft_cpu_free<Dtype>(this->ffted_bottom_data_);
+    fft_cpu_free<Dtype>(this->ptwise_result_);
+    fft_cpu_free<Dtype>(this->fft_convolution_result_real_);
 
-  fft_cpu_free<Dtype>(this->ffted_weights_);
-  fft_cpu_free<Dtype>(this->padded_real_bottom_);
-  fft_cpu_free<Dtype>(this->ffted_bottom_data_);
-  fft_cpu_free<Dtype>(this->ptwise_result_);
-  fft_cpu_free<Dtype>(this->fft_convolution_result_real_);
+    fft_cpu_destroy_plan<Dtype>(this->fft_bottom_plan_);
+    fft_cpu_destroy_plan<Dtype>(this->ifft_plan_);
 
-  fft_cpu_destroy_plan<Dtype>(this->fft_bottom_plan_);
-  fft_cpu_destroy_plan<Dtype>(this->ifft_plan_);
+    this->fft_initialized_ = false;
+  }
 }
 
 template <typename Dtype>
@@ -434,7 +609,8 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_cpu(Dtype *top) {
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu() {
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu(bool backward_pass) {
+
   const int batch_size = this->num_;            //              10
   const int N = this->num_output_;              //              256
   const int K = this->channels_ / this->group_; // 96 / 2     = 48
@@ -450,12 +626,13 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu() {
 
   std::complex<Dtype> *weight_complex = this->ffted_weights_;
   std::complex<Dtype> *this_bottom_data = this->ffted_bottom_data_;
-  std::complex<Dtype> *this_ptwise_result_ = this->ptwise_result_;
+  std::complex<Dtype> *this_ptwise_result = this->ptwise_result_;
 
 //// TODO: change loop like in gpu version --> openmp possible
-#ifdef _OPENMP
-#pragma omp parallel for private(batch_idx, n, hw) collapse(3) shared(this_ptwise_result_) //, ffted_bottom_data, weight_complex)
-#endif
+#warning "parallel loop not working in bw"
+//  #ifdef _OPENMP
+//  #pragma omp parallel for private(batch_idx, n, hw) collapse(3) shared(this_ptwise_result) //, ffted_bottom_data, weight_complex)
+//  #endif
   for (batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
     for (n = 0; n < N; ++n) {
       /* in the following loops every filter response is being calculated. there are num_output_ * (channels_ / group_) filters...
@@ -470,11 +647,11 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu() {
 
           // offset bottom to batch_idx image
           const int bottom_offset = K * this->group_ * H * W * batch_idx;
-          const std::complex<Dtype> *bottom_data = this_bottom_data + bottom_offset;
+          std::complex<Dtype> *bottom_data = this_bottom_data + bottom_offset;
 
           // offset res to batch_idx image
           const int res_offset = N * H * W * batch_idx;
-          std::complex<Dtype> *res_data = this_ptwise_result_ + res_offset;
+          std::complex<Dtype> *res_data = this_ptwise_result + res_offset;
 
 
           // this loop cannot be parallelized (because it is adding up stuff in the same memory address!
@@ -486,21 +663,26 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_cpu() {
 
             // Indexing: ((n * K + k) * H + h) * W + w
             const int input_idx = input_k * H * W + hw;
-            const std::complex<Dtype> input = bottom_data[input_idx];
-
             const int weight_idx = weight_offset * H * W + hw;
+            const int res_idx = n * H * W + hw;
+
+            const std::complex<Dtype> input = backward_pass ? res_data[res_idx] : bottom_data[input_idx];
             const std::complex<Dtype> weight = weight_complex[weight_idx];
+            std::complex<Dtype> *res = backward_pass ? bottom_data + input_idx : res_data + res_idx;
 
             // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
             // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
-            Dtype a = std::real(weight);
-            Dtype b = std::imag(weight);
-            Dtype c = std::real(input);
-            Dtype d = std::imag(input);
+            Dtype a = std::real(input);
+            Dtype b = std::imag(input);
+            Dtype c = std::real(weight);
+            Dtype d = std::imag(weight);
 
-            const int res_idx = n * H * W + hw;
-            std::complex<Dtype> res(a * c - b * d, b * c + a * d);
-            res_data[res_idx] += res;
+            std::complex<Dtype> tmp_res = !backward_pass ?
+                std::complex<Dtype>(a * c + b * d,  b * c - a * d) :
+                std::complex<Dtype>(a * c - b * d,  b * c + a * d);
+            // if backward pass do a cross-correlation (because weights are flipped...) by using complex conjugate, otherwise do convolution
+            *res += tmp_res;
+            // LOG(ERROR) << *res;
           }
         }
       }
@@ -541,10 +723,14 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu() {
 
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu(bool backward_pass) {
   // alloc data for result
+#warning alloc correct size
+
+  size_t alloc_size = backward_pass ? this->padded_bottom_complex_size_ : this->convolution_result_complex_size_ ;
+
   std::complex<Dtype> * fft_transposed_result =
-      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
+      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(alloc_size));
 
   const int H = this->fft_height_;
   const int W = (this->fft_width_ / 2) + 1;
@@ -571,9 +757,10 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
   //  const int group_offset_input = bottom_size / G;
   const int group_offset_output = output_size / this->num_ / G;
 
+  // change dims in backward pass
   const int M = this->num_;
-  const int N = this->num_output_ / G;
-  const int K = this->channels_ / G;
+  const int N = backward_pass ? this->channels_ / G : this->num_output_ / G;
+  const int K = backward_pass ? this->num_output_ / G : this->channels_ / G;
 
   const std::complex<Dtype> **weight_arr = new const std::complex<Dtype> *[H*W*G];
   const std::complex<Dtype> **input_arr = new const std::complex<Dtype> *[H*W*G];
@@ -584,24 +771,35 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
   for (int h = 0; h < H; ++h) {
     for (int w = 0; w < W; ++w) {
       const std::complex<Dtype> *weight = this->ffted_weights_ + (h * W + w ) * weight_size;
-      const std::complex<Dtype> *input = this->ffted_bottom_data_ + (h * W + w ) * bottom_size;
-      std::complex<Dtype> *output = fft_transposed_result + (h * W + w ) * output_size;
+      std::complex<Dtype> *input = backward_pass ?
+                                      this->ptwise_result_ + (h * W + w ) * output_size :
+                                      this->ffted_bottom_data_ + (h * W + w ) * bottom_size;
+      int out_off = backward_pass ?
+                      bottom_size :
+                      output_size;
+      std::complex<Dtype> *output = fft_transposed_result + (h * W + w ) * out_off;
 
       for (int g = 0; g < G; ++g) {
         weight_arr[idx] = weight + g * group_offset_weight;
-        input_arr[idx] = input + g * group_offset_input;
-        output_arr[idx] = output + g * group_offset_output;
+        int input_offset = backward_pass ?
+                              group_offset_output :
+                              group_offset_input;
+        input_arr[idx] = input + g *input_offset;
+        int output_offset = backward_pass ?
+                              group_offset_input :
+                              group_offset_output;
+        output_arr[idx] = output + g * output_offset;
         idx++;
       }
     }
   }
 
-  int lda = K * G; // 96
-  int ldb = K;
+  int lda = K * G; // 3
+  // int ldb = NULL;
   int ldc = N * G; // 256
   // Do batched matrix multiplication
-  caffe_cpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasTrans, M, N, K,
-                                      &one_complex, input_arr, weight_arr, &zero_complex, output_arr, H*W*G, &lda, &ldb, &ldc);
+  caffe_cpu_gemm_complex_batch<Dtype>(CblasNoTrans, backward_pass ? CblasNoTrans : CblasConjTrans, M, N, K,
+                                      &one_complex, input_arr, weight_arr, &zero_complex, output_arr, H*W*G, &lda, NULL, &ldc);
 
   delete weight_arr;
   delete input_arr;
@@ -634,10 +832,11 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
 //    fft_cpu_free<Dtype>(this->ptwise_result_);
 //    this->ptwise_result_ = fft_transposed_result;
 //  } else  {
-  const int shape_result[] = {H, W, this->num_, this->num_output_};
+  std::complex<Dtype> *dst = backward_pass ? this->ffted_bottom_data_ : this->ptwise_result_;
+  const int shape_result[] = {H, W, this->num_, backward_pass ? this->channels_ : this->num_output_};
   const int permutation_result[] = {2, 3, 0, 1};
 
-  this->fft_permute_4d_cpu(fft_transposed_result, this->ptwise_result_, shape_result, permutation_result);
+  this->fft_permute_4d_cpu(fft_transposed_result, dst, shape_result, permutation_result);
 
   fft_cpu_free<Dtype>(fft_transposed_result);
 
@@ -671,13 +870,13 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(Dtype *top_data) {
       {
         // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
         // idx (kernel_h_ - 1). The stride times the idx of the output pixel will be added onto this.
-        int h_idx = (this->kernel_h_ - 1) + h * this->stride_h_; // 3 ops
+        int h_idx = 0 + h * this->stride_h_; // 3 ops
 
         for (int w = 0; w < this->width_out_; ++w) // =55 in 1st layer
         {
           // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
           // idx (kernel_w_ - 1). The stride times the idx of the output pixel will be added onto this.
-          int w_idx = (this->kernel_w_ - 1) + w * this->stride_w_; // 3 ops
+          int w_idx = 0 + w * this->stride_w_; // 3 ops
           //((n * K + k) * H + h) * W + w;
           const int top_data_idx = ((batch_idx * N + n) * this->height_out_ + h) * this->width_out_ + w;
 
@@ -694,7 +893,7 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(Dtype *top_data) {
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dtype *blob_data, Dtype *padded_data,
-                                               int pad_h, int pad_w, bool flip) {
+                                               int pad_h, int pad_w, bool flip, int stride_h, int stride_w) {
   const int N = shape[0];
   const int K = shape[1];
   const int H = shape[2];
@@ -714,7 +913,7 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
         for (int w = 0; w < W; w++) {
           // ((n * ch_gr + c) * fft_height_ + h)* 2 * (fft_width_ / 2 + 1) + w
           const int offset_weight_real = (n * K + k) * this->fft_real_size_;
-          // e.g. a 3x3 filter should fit into a 5x5 because the image size is 5x5
+          // e.g. a 3x3 filter should fit into a 5x5 because the image size is 5x5 (here the stride is 1)
           // <--W-->
           // ^ f f f 0 0
           // H f f f 0 0
@@ -722,7 +921,7 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
           //   0 0 0 0 0
           //   0 0 0 0 0
 
-          const int idx_weight_real = offset_weight_real + (h + pad_h) * this->fft_width_ + (w + pad_w);
+          const int idx_weight_real = offset_weight_real + (h * stride_h + pad_h) * this->fft_width_ + (w  * stride_w + pad_w);
           // copy each weight into the fft_weights_in_real_
           // get ptr to blob data. indexing see: http://caffe.berkeleyvision.org/tutorial/net_layer_blob.html
           // Blob memory is row-major in layout, so the last / rightmost dimension changes fastest. For example,
