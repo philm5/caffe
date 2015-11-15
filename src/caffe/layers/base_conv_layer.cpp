@@ -207,6 +207,7 @@ void BaseConvolutionLayer<Dtype>::weight_cpu_gemm(const Dtype* input,
     conv_im2col_cpu(input, col_buffer_.mutable_cpu_data());
     col_buff = col_buffer_.cpu_data();
   }
+
   for (int g = 0; g < group_; ++g) {
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasTrans, conv_out_channels_ / group_,
         kernel_dim_ / group_, conv_out_spatial_dim_,
@@ -234,6 +235,7 @@ void BaseConvolutionLayer<Dtype>::forward_gpu_gemm(const Dtype* input,
     }
     col_buff = col_buffer_.gpu_data();
   }
+
   for (int g = 0; g < group_; ++g) {
     caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, conv_out_channels_ /
         group_, conv_out_spatial_dim_, kernel_dim_ / group_,

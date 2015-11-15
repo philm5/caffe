@@ -167,7 +167,7 @@ INCLUDE_DIRS += $(BUILD_INCLUDE_DIR) ./src ./include
 ifneq ($(CPU_ONLY), 1)
 	INCLUDE_DIRS += $(CUDA_INCLUDE_DIR)
 	LIBRARY_DIRS += $(CUDA_LIB_DIR)
-	LIBRARIES := cuda cudart cublas curand cufft npps
+	LIBRARIES := cuda cudart cublas curand
 endif
 LIBRARIES += glog gflags protobuf leveldb snappy \
 	lmdb boost_system hdf5_hl hdf5 m \
@@ -306,14 +306,15 @@ ifeq ($(WITH_PYTHON_LAYER), 1)
 	LIBRARIES += $(PYTHON_LIBRARIES)
 endif
 
-# IPP ?
-IPP ?= 1
+# IPP
+IPP ?= 0
 ifeq ($(IPP), 1)
 	DIR_IPP_LIB.x86_64 := $(IPPROOT)/lib/intel64
 	DIR_LIB.i686       := $(IPPROOT)/lib/ia32
 	LIBRARY_DIRS       += $(DIR_LIB.$(ARCH))
 	LIBRARIES          += ippi ipps ippcore
 	INCLUDE_DIRS       += $(IPPROOT)/include
+    COMMON_FLAGS += -DUSE_IPP
 endif
 
 # BLAS configuration (default = ATLAS)
@@ -355,11 +356,18 @@ LIBRARY_DIRS += $(BLAS_LIB)
 
 LIBRARY_DIRS += $(LIB_BUILD_DIR)
 
+# FFT
 FFT ?= 0
 ifeq ($(FFT), 1)
         ifneq ($(BLAS), mkl)
                 LIBRARIES += fftw3f fftw3
         endif
+        
+        # cuda stuff
+        ifneq ($(CPU_ONLY), 1)
+			LIBRARIES += cufft npps
+		endif
+        
         COMMON_FLAGS += -DUSE_FFT
 endif
 

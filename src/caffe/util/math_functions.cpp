@@ -86,6 +86,31 @@ void caffe_cpu_gemm_complex_batch<double>(const CBLAS_TRANSPOSE TransA,
 }
 
 template <>
+void caffe_cpu_geam_complex<float>(const CBLAS_TRANSPOSE TransA,
+                                   const CBLAS_TRANSPOSE TransB, const int M, const int N,
+                                   std::complex<float> *alpha, const std::complex<float> *A, int lda,
+                                   const std::complex<float> *B, std::complex<float> *beta, int ldb,
+                                   std::complex<float> *C, int ldc) {
+
+  char transA = (TransA == CblasNoTrans) ? 'N' : 'T';
+  mkl_comatcopy('R', transA, M, N, *reinterpret_cast<MKL_Complex8 *> (alpha),
+                reinterpret_cast<const MKL_Complex8 *> (A), lda, reinterpret_cast<MKL_Complex8 *> (C), ldc);
+}
+
+template <>
+void caffe_cpu_geam_complex<double>(const CBLAS_TRANSPOSE TransA,
+                                    const CBLAS_TRANSPOSE TransB, const int M, const int N,
+                                    std::complex<double> *alpha, const std::complex<double> *A, int lda,
+                                    const std::complex<double> *B, std::complex<double> *beta, int ldb,
+                                    std::complex<double> *C, int ldc) {
+
+  char transA = (TransA == CblasNoTrans) ? 'N' : 'T';
+
+  mkl_zomatcopy('R', transA, M, N, *reinterpret_cast<MKL_Complex16 *> (alpha),
+                reinterpret_cast<const MKL_Complex16 *> (A), lda, reinterpret_cast<MKL_Complex16 *> (C), ldc);
+}
+
+template <>
 void caffe_cpu_gemv<float>(const CBLAS_TRANSPOSE TransA, const int M,
     const int N, const float alpha, const float* A, const float* x,
     const float beta, float* y) {
