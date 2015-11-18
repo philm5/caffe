@@ -314,7 +314,7 @@ ifeq ($(IPP), 1)
 	LIBRARY_DIRS       += $(DIR_LIB.$(ARCH))
 	LIBRARIES          += ippi ipps ippcore
 	INCLUDE_DIRS       += $(IPPROOT)/include
-    COMMON_FLAGS += -DUSE_IPP
+    COMMON_FLAGS 	   += -DUSE_IPP
 endif
 
 # BLAS configuration (default = ATLAS)

@@ -62,6 +62,25 @@ template<typename Dtype>
 void fft_cpu_destroy_plan(const void *plan_handle);
 
 
+template<typename Dtype>
+inline std::complex<Dtype> fft_cpu_multiply_complex(std::complex<Dtype> first, std::complex<Dtype> second,
+                                                    bool multiply_with_conjugate) {
+  // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
+  // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
+
+  Dtype a = std::real(first);
+  Dtype b = std::imag(first);
+  Dtype c = std::real(second);
+  Dtype d = std::imag(second);
+
+  std::complex<Dtype> tmp_res = multiply_with_conjugate ?
+      std::complex<Dtype>(a * c + b * d,  b * c - a * d) :
+      std::complex<Dtype>(a * c - b * d,  b * c + a * d);
+
+  return tmp_res;
+}
+
+
 /* Helper methods for fft */
 bool check_power_of_2(unsigned int n);
 

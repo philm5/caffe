@@ -199,6 +199,9 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
         fft_on_(true),
         test_mode_ (test_mode) {}
   virtual ~ConvolutionLayerFFT();
+
+  enum PASS_TYPE { FORWARD, BACKWARD, WEIGHT };
+
  protected:
   /**
    * Generic FFT Stuff:
@@ -211,6 +214,8 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void Backward_cpu_fft(const Dtype* input, Dtype* output);
 
+  virtual void Weight_cpu_fft(const Dtype* input, const Dtype* output, Dtype* weight);
+
   virtual void Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
                                const vector<Blob<Dtype>*>& top);
 
@@ -219,7 +224,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void Forward_cpu_fft_single(const Dtype *bottom, Dtype *top);
 
-  virtual void fft_set_up();
+  virtual void fft_set_up(bool init_weights = true);
 
   virtual void fft_free_weights_cpu();
 
@@ -236,15 +241,54 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_bottom_cpu(const Dtype *bottom);
 
+  virtual void fft_top_cpu(const Dtype *top);
+
   virtual void fft_convolve_cpu(Dtype *top);
 
-  virtual void fft_pointwise_multiply_cpu(bool backward_pass = false);
+  virtual void fft_convolve_backward_cpu(Dtype *bottom);
+
+  virtual void fft_convolve_weight_cpu(Dtype *weight);
+
+  /**
+   * Pointwise multiplication via loops
+   */
+
+  virtual void fft_pointwise_multiply_cpu();
+
+  virtual void fft_pointwise_multiply_backward_cpu();
+
+  virtual void fft_pointwise_multiply_weight_cpu();
+
+  /**
+   * Pointwise multiplication via IPP (SLOW; depreceated)
+   */
 
   virtual void fft_pointwise_multiply_ipp_cpu();
 
-  virtual void fft_pointwise_multiply_gemm_cpu(bool backward_pass = false);
+  /**
+   * Pointwise multiplication via gemm
+   */
+
+  virtual void fft_pointwise_multiply_gemm_init_cpu(PASS_TYPE pass_type);
+
+  virtual void fft_pointwise_multiply_gemm_cpu();
+
+  virtual void fft_pointwise_multiply_gemm_backward_cpu();
+
+  virtual void fft_pointwise_multiply_gemm_weight_cpu();
+
+  virtual void fft_pointwise_multiply_gemm_construct_array_cpu(const std::complex<Dtype> *weight_complex,
+                                                               const std::complex<Dtype> *bottom_complex,
+                                                               std::complex<Dtype> *fft_transposed_result,
+                                                               const std::complex<Dtype> **weight_arr,
+                                                               const std::complex<Dtype> **input_arr,
+                                                               std::complex<Dtype> **output_arr);
 
   virtual void fft_normalize_cpu(Dtype *top_data);
+
+  virtual void fft_normalize_backward_cpu(Dtype *bottom);
+
+  virtual void fft_normalize_weight_cpu(Dtype *weight);
 
   /**
    * Helper stuff
@@ -304,6 +348,19 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   int fft_complex_size_;
   int fft_real_size_;
 
+  /**
+   * CGEMM specific fields / sizes
+   */
+  int cgemm_H;
+  int cgemm_W;
+  int cgemm_G;
+  int cgemm_weight_size;
+  int cgemm_bottom_size;
+  int cgemm_output_size;
+  int cgemm_group_offset_weight;
+  int cgemm_group_offset_input;
+  int cgemm_group_offset_output;
+
   // Allocation sizes:
   size_t padded_weights_real_size_;
   size_t padded_weights_complex_size_;
@@ -320,10 +377,12 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   int num_threads_;
   int num_weights_;
   std::vector<int> bottom_shape_;
+  std::vector<int> top_shape_;
 
   // Plans and in memory values. It is defined globally so no free and malloc has to be called all the time...
   // Both different for CPU/GPU
   void *fft_bottom_plan_;
+  void *fft_top_plan_;
   void *ifft_plan_;
 
   std::complex<Dtype> *ptwise_result_;
