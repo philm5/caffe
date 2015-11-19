@@ -63,22 +63,8 @@ void fft_cpu_destroy_plan(const void *plan_handle);
 
 
 template<typename Dtype>
-inline std::complex<Dtype> fft_cpu_multiply_complex(std::complex<Dtype> first, std::complex<Dtype> second,
-                                                    bool multiply_with_conjugate) {
-  // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
-  // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
-
-  Dtype a = std::real(first);
-  Dtype b = std::imag(first);
-  Dtype c = std::real(second);
-  Dtype d = std::imag(second);
-
-  std::complex<Dtype> tmp_res = multiply_with_conjugate ?
-      std::complex<Dtype>(a * c + b * d,  b * c - a * d) :
-      std::complex<Dtype>(a * c - b * d,  b * c + a * d);
-
-  return tmp_res;
-}
+std::complex<Dtype> fft_cpu_multiply_complex(std::complex<Dtype> first, std::complex<Dtype> second,
+                                             bool multiply_with_conjugate);
 
 
 /* Helper methods for fft */
@@ -106,6 +92,12 @@ template<typename Dtype>
 void fft_gpu_execute_plan_c2r(cufftHandle plan, std::complex<Dtype> *in, Dtype *out);
 
 void fft_gpu_destroy_plan(cufftHandle plan_handle);
+
+__device__ void fft_gpu_cmultiply_add(const cufftComplex first, const cufftComplex second,
+                                     cufftComplex *out, bool multiply_with_conjugate);
+
+__device__ void fft_gpu_zmultiply_add(const cufftDoubleComplex first, const cufftDoubleComplex second,
+                                      cufftDoubleComplex *out, bool multiply_with_conjugate);
 
 
 template<typename Dtype>

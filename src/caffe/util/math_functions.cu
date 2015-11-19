@@ -134,9 +134,9 @@ void caffe_gpu_gemm_complex_batch<float>(const CBLAS_TRANSPOSE TransA,
   int ldc_new = (ldc == NULL) ? N : *ldc;
 
   cublasOperation_t cuTransA =
-      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : (TransA == CblasConjTrans) ? CUBLAS_OP_C : CUBLAS_OP_T;
   cublasOperation_t cuTransB =
-      (TransB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+      (TransB == CblasNoTrans) ? CUBLAS_OP_N : (TransB == CblasConjTrans) ? CUBLAS_OP_C : CUBLAS_OP_T;
 
   CUBLAS_CHECK(cublasCgemmBatched(Caffe::cublas_handle(), cuTransB, cuTransA, N, M, K, reinterpret_cast<const cuComplex *>(alpha),
                                   reinterpret_cast<const cuComplex **>(B_arr), ldb_new, reinterpret_cast<const cuComplex **>(A_arr), lda_new,
@@ -155,9 +155,10 @@ void caffe_gpu_gemm_complex_batch<double>(const CBLAS_TRANSPOSE TransA,
   int ldc_new = (ldc == NULL) ? N : *ldc;
 
   cublasOperation_t cuTransA =
-      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : (TransA == CblasConjTrans) ? CUBLAS_OP_C : CUBLAS_OP_T;
   cublasOperation_t cuTransB =
-      (TransB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+      (TransB == CblasNoTrans) ? CUBLAS_OP_N : (TransB == CblasConjTrans) ? CUBLAS_OP_C : CUBLAS_OP_T;
+
   CUBLAS_CHECK(cublasZgemmBatched(Caffe::cublas_handle(), cuTransB, cuTransA, N, M, K, reinterpret_cast<const cuDoubleComplex *>(alpha),
                                   reinterpret_cast<const cuDoubleComplex **>(B_arr), ldb_new, reinterpret_cast<const cuDoubleComplex **>(A_arr), lda_new,
                                   reinterpret_cast<const cuDoubleComplex *>(beta), reinterpret_cast<cuDoubleComplex **>(C_arr), ldc_new, batch_size));

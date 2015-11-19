@@ -249,6 +249,30 @@ void fft_cpu_destroy_plan<double>(const void *plan_handle) {
   fftw_destroy_plan((const fftw_plan) plan_handle);
 }
 
+template<typename Dtype>
+std::complex<Dtype> fft_cpu_multiply_complex(std::complex<Dtype> first, std::complex<Dtype> second,
+                                             bool multiply_with_conjugate) {
+ // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
+ // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
+
+ Dtype a = std::real(first);
+ Dtype b = std::imag(first);
+ Dtype c = std::real(second);
+ Dtype d = std::imag(second);
+
+ std::complex<Dtype> tmp_res = multiply_with_conjugate ?
+     std::complex<Dtype>(a * c + b * d,  b * c - a * d) :
+     std::complex<Dtype>(a * c - b * d,  b * c + a * d);
+
+ return tmp_res;
+}
+
+template std::complex<float> fft_cpu_multiply_complex<float>(std::complex<float> first, std::complex<float> second,
+                                                             bool multiply_with_conjugate);
+
+template std::complex<double> fft_cpu_multiply_complex<double>(std::complex<double> first, std::complex<double> second,
+                                                               bool multiply_with_conjugate);
+
 bool check_power_of_2(unsigned int n) {
   // source see: http://graphics.stanford.edu/~seander/bithacks.html#DetermineIfPowerOf2
   // zero will be recognized as power of 2 (incorrectly.) But no input dim should be zero...

@@ -186,7 +186,7 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 #define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 1
 #define FFT_CONVOLUTION_KIND_CGEMM 2
 
-#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_CGEMM
+#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
 
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
@@ -305,6 +305,11 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
                             const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+
+
+  virtual void Backward_gpu_fft(const Dtype* input, Dtype* output);
+
+  virtual void Weight_gpu_fft(const Dtype* input, const Dtype* output, Dtype* weight);
 
   virtual void Forward_gpu_fft(const vector<Blob<Dtype>*>& bottom,
                                const vector<Blob<Dtype>*>& top);

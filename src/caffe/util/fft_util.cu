@@ -79,7 +79,7 @@ __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K
     // printf("<<<%i, %i>>>| n: %i k: %i K: %i\n", blockIdx.x, threadIdx.x, n, k, K);
     // check which group_ idx we are in
     const int group_idx = n / weight_group_size;
-    const int group = (weight_group_size / N);
+    const int group = (N / weight_group_size);
 
     // offset bottom to batch_idx image
     const int bottom_offset = K * group * H * W * batch_idx;
@@ -102,16 +102,9 @@ __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K
       const int weight_idx = weight_offset * H * W + hw;
       const cufftComplex weight = weight_complex[weight_idx];
 
-      // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
-      // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
-      float a = weight.x;
-      float b = weight.y;
-      float c = input.x;
-      float d = input.y;
-
       const int res_idx = n * H * W + hw;
-      res_data[res_idx].x += a * c - b * d;
-      res_data[res_idx].y += b * c + a * d;
+
+      fft_gpu_cmultiply_add(input, weight, res_data + res_idx, true);
     }
   }
 }
@@ -144,11 +137,11 @@ __global__ void fft_util_normalize_gpu_kernel(const int N, const int H, const in
 
     // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
     // idx (kernel_h_ - 1). The stride times the idx of the output pixel will be added onto this.
-    const int h_idx = (kernel_h - 1) + h * stride_h;
+    const int h_idx = 0 + h * stride_h;
 
     // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
     // idx (kernel_w_ - 1). The stride times the idx of the output pixel will be added onto this.
-    const int w_idx = (kernel_w - 1) + w * stride_w;
+    const int w_idx = 0 + w * stride_w;
     //((n * K + k) * H + h) * W + w;
     const int top_data_idx = ((batch_idx * N + n) * H + h) * W + w;
 
@@ -436,7 +429,7 @@ template void fft_util_pointwise_multiply_npp_gpu<double>(std::vector<int> shape
 
 template <typename Dtype>
 void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
-                                         const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result) {
+                                          const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result) {
   const int batch_size = shape[0];
   const int N = shape[1];
   const int K = shape[2];
@@ -489,7 +482,7 @@ void fft_util_pointwise_multiply_gemm_gpu(std::vector<int> shape, int group, con
   int ldc = N_gemm * G; // 256
 
   // Do batched matrix multiplication
-  caffe_gpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasTrans, M_gemm, N_gemm, K_gemm,
+  caffe_gpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasConjTrans, M_gemm, N_gemm, K_gemm,
                                       &one_complex, input_arr_gpu, weight_arr_gpu, &zero_complex, output_arr_gpu, H*W*G,
                                       &lda, &ldb, &ldc);
 
@@ -616,8 +609,8 @@ void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,
 
   fft_util_normalize_gpu_kernel<<<block_num, thread_num>>>
       (N, H, W, kernel_h, kernel_w, stride_h, stride_w,
-       normalize_factor, fft_height, fft_width,
-       conv_result_real, top_data);
+          normalize_factor, fft_height, fft_width,
+          conv_result_real, top_data);
   CUDA_POST_KERNEL_CHECK;
 }
 
@@ -627,9 +620,9 @@ template void fft_util_normalize_gpu<float>(std::vector<int> shape, const int ke
                                             const float *conv_result_real, float *top_data);
 
 template void fft_util_normalize_gpu<double>(std::vector<int> shape, const int kernel_h,
-                                            const int kernel_w, const int stride_h, const int stride_w,
-                                            float normalize_factor, int fft_height, int fft_width,
-                                            const double *conv_result_real, double *top_data);
+                                             const int kernel_w, const int stride_h, const int stride_w,
+                                             float normalize_factor, int fft_height, int fft_width,
+                                             const double *conv_result_real, double *top_data);
 
 template <typename Dtype>
 void fft_util_geam_transpose_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
@@ -660,35 +653,35 @@ template void fft_util_geam_transpose_gpu<float>(const std::complex<float> *in, 
                                                  const int shape[4], const int sep);
 
 template void fft_util_geam_transpose_gpu<double>(const std::complex<double> *in, std::complex<double> *out,
-                                                 const int shape[4], const int sep);
+                                                  const int shape[4], const int sep);
 
 template <typename Dtype>
 void fft_util_permute_4d_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
                              const int shape[4], const int permutation[4]) {
 
-    const int N = shape[0];              // 96
-    // const int K = shape[1];              // 3
-    const int H = shape[2];              // 256
-    const int W = shape[3];              // 129
+  const int N = shape[0];              // 96
+  // const int K = shape[1];              // 3
+  const int H = shape[2];              // 256
+  const int W = shape[3];              // 129
 
-    dim3 block_num(N, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
-    int thread_num = CAFFE_CUDA_NUM_THREADS;
-
-
-    int *shape_gpu;
-    int *permutation_gpu;
-    CUDA_CHECK(cudaMalloc(&shape_gpu, sizeof(int) * 4));
-    CUDA_CHECK(cudaMalloc(&permutation_gpu, sizeof(int) * 4));
-    CUDA_CHECK(cudaMemcpy(shape_gpu, shape, sizeof(int) * 4, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(permutation_gpu, permutation, sizeof(int) * 4, cudaMemcpyHostToDevice));
+  dim3 block_num(N, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
+  int thread_num = CAFFE_CUDA_NUM_THREADS;
 
 
-    fft_util_permute_4d_gpu_kernel<<<block_num, thread_num>>>
-        (in, out, shape_gpu, permutation_gpu);
-    CUDA_POST_KERNEL_CHECK;
+  int *shape_gpu;
+  int *permutation_gpu;
+  CUDA_CHECK(cudaMalloc(&shape_gpu, sizeof(int) * 4));
+  CUDA_CHECK(cudaMalloc(&permutation_gpu, sizeof(int) * 4));
+  CUDA_CHECK(cudaMemcpy(shape_gpu, shape, sizeof(int) * 4, cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMemcpy(permutation_gpu, permutation, sizeof(int) * 4, cudaMemcpyHostToDevice));
 
-    CUDA_CHECK(cudaFree(shape_gpu));
-    CUDA_CHECK(cudaFree(permutation_gpu));
+
+  fft_util_permute_4d_gpu_kernel<<<block_num, thread_num>>>
+      (in, out, shape_gpu, permutation_gpu);
+  CUDA_POST_KERNEL_CHECK;
+
+  CUDA_CHECK(cudaFree(shape_gpu));
+  CUDA_CHECK(cudaFree(permutation_gpu));
 }
 
 template void fft_util_permute_4d_gpu<float>(const std::complex<float> *in, std::complex<float> *out,
@@ -769,8 +762,8 @@ void fft_gpu_plan_many_dft_c2r_2d<float>(cufftHandle *plan, int n0,
 
 template<>
 void fft_gpu_plan_many_dft_c2r_2d<double>(cufftHandle *plan, int n0,
-                                         int n1,
-                                         int how_many) {
+                                          int n1,
+                                          int how_many) {
 
   int rank = 2;
   int n[] = {n0, n1};
@@ -814,4 +807,41 @@ void fft_gpu_destroy_plan(cufftHandle plan_handle) {
   cufftDestroy(plan_handle);
 }
 
+__device__ void fft_gpu_cmultiply_add(const cufftComplex first, const cufftComplex second,
+                                      cufftComplex *out, bool multiply_with_conjugate) {
+  // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
+  // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
+
+  float a = first.x;
+  float b = first.y;
+  float c = second.x;
+  float d = second.y;
+
+  if (multiply_with_conjugate) {
+    out->x += a * c + b * d;
+    out->y += b * c - a * d;
+  } else {
+    out->x += a * c - b * d;
+    out->y += b * c + a * d;
+  }
+}
+
+__device__ void fft_gpu_zmultiply_add(const cufftDoubleComplex first, const cufftDoubleComplex second,
+                                      cufftDoubleComplex *out, bool multiply_with_conjugate) {
+  // formula for complex mult from here: https://en.wikipedia.org/wiki/Complex_number#Multiplication_and_division
+  // (a+bi) (c+di) = (ac-bd) + (bc+ad)i.
+
+  double a = first.x;
+  double b = first.y;
+  double c = second.x;
+  double d = second.y;
+
+  if (multiply_with_conjugate) {
+    out->x += a * c + b * d;
+    out->y += b * c - a * d;
+  } else {
+    out->x += a * c - b * d;
+    out->y += b * c + a * d;
+  }
+}
 }
