@@ -28,8 +28,8 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 }
 
 template <typename Dtype>
-void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
-      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+void ConvolutionLayerFFT<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
+                                              const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   this->fft_on_ = true;
 
   const Dtype* weight = this->blobs_[0]->gpu_data();
@@ -51,43 +51,28 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
           // gradient w.r.t. weight. Note that we will accumulate diffs.
           if (this->param_propagate_down_[0]) {
             this->weight_gpu_gemm(bottom_data + bottom[i]->offset(n),
-                top_diff + top[i]->offset(n), weight_diff);
+                                  top_diff + top[i]->offset(n), weight_diff);
           }
           // gradient w.r.t. bottom data, if necessary.
           if (propagate_down[i]) {
             this->backward_gpu_gemm(top_diff + top[i]->offset(n), weight,
-                bottom_diff + bottom[i]->offset(n));
+                                    bottom_diff + bottom[i]->offset(n));
           }
         }
       } else {
-
-        for (int n = 0; n < this->num_; ++n) {
-          // gradient w.r.t. weight. Note that we will accumulate diffs.
-          if (this->param_propagate_down_[0]) {
-            this->weight_gpu_gemm(bottom_data + bottom[i]->offset(n),
-                top_diff + top[i]->offset(n), weight_diff);
-          }
+        // gradient w.r.t. weight. Note that we will accumulate diffs.
+        if (this->param_propagate_down_[0]) {
+          this->Weight_gpu_fft(bottom_data + bottom[i]->offset(0),
+                               top_diff + top[i]->offset(0), weight_diff);
         }
+
+        this->fft_update_weights_gpu();
 
         // gradient w.r.t. bottom data, if necessary.
         if (propagate_down[i]) {
           this->Backward_gpu_fft(top_diff + top[i]->offset(0),
                                  bottom_diff + bottom[i]->offset(0));
         }
-//        // gradient w.r.t. weight. Note that we will accumulate diffs.
-//        if (this->param_propagate_down_[0]) {
-//          this->Weight_gpu_fft(bottom_data + bottom[i]->offset(0),
-//                               top_diff + top[i]->offset(0), weight_diff);
-//        }
-//
-//        this->fft_free_weights_gpu();
-//        this->fft_set_up();
-//        // gradient w.r.t. bottom data, if necessary.
-//        if (propagate_down[i]) {
-//          this->Backward_gpu_fft(top_diff + top[i]->offset(0),
-//                                 bottom_diff + bottom[i]->offset(0));
-//        }
-
       }
     }
   }
@@ -99,30 +84,32 @@ void ConvolutionLayerFFT<Dtype>::Weight_gpu_fft(const Dtype* input, const Dtype*
   this->fft_bottom_gpu(input);
 
   // fft the top diff data...
-  // this->fft_top_gpu(output);
+  this->fft_top_gpu(output);
 
-  // this->fft_convolve_weight_gpu(weight);
+  this->fft_convolve_weight_gpu(weight);
 }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Backward_gpu_fft(const Dtype* top_blob, Dtype* bottom_blob) {
   // fft the top diff data...
-  // this->fft_top_gpu(top_blob);
+  this->fft_top_gpu(top_blob);
 
-  // this->fft_convolve_backward_gpu(bottom_blob);
+  this->fft_convolve_backward_gpu(bottom_blob);
 }
 
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+
+  this->fft_set_up();
+
   // the unit tests modify weights between two Forward ops by step_size to check if backward calculates the gradient correctly.
   // But since the weights are only ffted once to save compute power, changes arent reflected in the complex values (ffted ones).
   // If test mode is on, the weights are ffted every pass!!! Costs extra computing effort if done.
   if (this->test_mode_) {
-    this->fft_free_weights_gpu();
+    this->fft_update_weights_gpu();
   }
-  this->fft_set_up();
 
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->gpu_data();
@@ -162,52 +149,28 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_normal(
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft_single(const Dtype *bottom,
                                                         Dtype *top) {
-    this->fft_bottom_gpu(bottom);
+  this->fft_bottom_gpu(bottom);
 
-    this->fft_convolve_gpu(top);
+  this->fft_convolve_gpu(top);
 }
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
-//  this->mem_info_gpu();
+  CUDA_CHECK(cudaMalloc(&this->ffted_weights_, this->padded_weights_complex_size_));
 
-  Dtype *padded_real_weights_gpu;
+  fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_weight_plan_, this->fft_height_, this->fft_width_, this->num_weights_);
 
-  CUDA_CHECK(cudaMalloc(&padded_real_weights_gpu, this->padded_weights_real_size_));
-  const Dtype *weight_data = this->blobs_[0]->gpu_data();
-	vector<int> shape;
-	shape.push_back(this->num_output_);
-	shape.push_back((this->channels_ / this->group_));
-	shape.push_back(this->kernel_h_);
-	shape.push_back(this->kernel_w_);
 
-  // weights do not have to be padded (only 0-padded). But the weights have to be flipped, since the convolution is actually a
-  // cross-correlation.
-	pad_real_blob_gpu<Dtype>(shape, this->fft_height_, this->fft_width_, weight_data, padded_real_weights_gpu,
-	                         0, 0, false);
+  // init the weights...
+  this->fft_update_weights_gpu();
 
-//	this->mem_info_gpu();
-	CUDA_CHECK(cudaMalloc(&this->ffted_weights_, this->padded_weights_complex_size_));
-
-	cufftHandle plan;
-	fft_gpu_plan_many_dft_r2c_2d<Dtype>(&plan, this->fft_height_, this->fft_width_, this->num_weights_);
-	// caffe_gpu_memset(this->padded_weights_complex_size_, 0., this->ffted_weights_);
-
-	fft_gpu_execute_plan_r2c<Dtype>(plan, padded_real_weights_gpu, this->ffted_weights_);
-//	this->mem_info_gpu();
-
-	// destroy the plan
-	fft_gpu_destroy_plan(plan);
-
-	// free the padded real data... (no more need for it)
-	CUDA_CHECK(cudaFree(padded_real_weights_gpu));
-
-	// Set-up bottom plan once
-  // Create FFT plan for the bottom data and alloc memory
+  // Set-up bottom plan once
+  // Create FFT plan for the bottom data
   fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_bottom_plan_gpu_, this->fft_height_, this->fft_width_, this->channels_ * this->num_);
+  // Create FFT plan for the top data
+  fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_top_plan_gpu_, this->fft_height_, this->fft_width_, this->num_output_ * this->num_);
 
   // Allocate the real and complex memory for the bottom data
-
   CUDA_CHECK(cudaMalloc(&this->padded_real_bottom_gpu_, this->padded_bottom_real_size_));
   CUDA_CHECK(cudaMalloc(&this->ffted_bottom_data_gpu_, this->padded_bottom_complex_size_));
 
@@ -216,12 +179,34 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 
 
   fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_plan_gpu_, this->fft_height_, this->fft_width_, this->num_output_ * this->num_);
+  fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_backward_plan_gpu_, this->fft_height_, this->fft_width_, this->channels_ * this->num_);
+  fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_weight_plan_gpu_, this->fft_height_, this->fft_width_, this->num_weights_);
+}
 
-//  this->mem_info_gpu();
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_update_weights_gpu() {
+  Dtype *padded_real_weights_gpu;
 
-//
-#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  CUDA_CHECK(cudaMalloc(&padded_real_weights_gpu, this->padded_weights_real_size_));
+  const Dtype *weight_data = this->blobs_[0]->gpu_data();
+  vector<int> shape;
+  shape.push_back(this->num_output_);
+  shape.push_back((this->channels_ / this->group_));
+  shape.push_back(this->kernel_h_);
+  shape.push_back(this->kernel_w_);
+
+  // weights do not have to be padded (only 0-padded). But the weights have to be flipped, since the convolution is actually a
+  // cross-correlation.
+  pad_real_blob_gpu<Dtype>(shape, this->fft_height_, this->fft_width_, weight_data, padded_real_weights_gpu,
+                           0, 0, 1, 1);
+
+  fft_gpu_execute_plan_r2c<Dtype>(fft_weight_plan_, padded_real_weights_gpu, this->ffted_weights_);
+
+  // free the padded real data... (no more need for it)
+  CUDA_CHECK(cudaFree(padded_real_weights_gpu));
+
   // transpose weights if cgemm pt-wise product should be done
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   std::complex<Dtype> *transposed_weights;
   CUDA_CHECK(cudaMalloc(&transposed_weights, this->padded_weights_complex_size_));
 
@@ -232,20 +217,23 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
   CUDA_CHECK(cudaFree(this->ffted_weights_));
   this->ffted_weights_ = transposed_weights;
 #endif
-
 }
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_free_weights_gpu() {
   if (this->fft_initialized_) {
+    fft_gpu_destroy_plan(fft_weight_plan_);
     CUDA_CHECK(cudaFree(this->ffted_weights_));
     fft_gpu_destroy_plan(this->fft_bottom_plan_gpu_);
+    fft_gpu_destroy_plan(this->fft_top_plan_gpu_);
     CUDA_CHECK(cudaFree(this->padded_real_bottom_gpu_));
     CUDA_CHECK(cudaFree(this->ffted_bottom_data_gpu_));
     CUDA_CHECK(cudaFree(this->ptwise_result_gpu_));
     CUDA_CHECK(cudaFree(this->fft_convolution_result_real_gpu_));
 
     fft_gpu_destroy_plan(this->ifft_plan_gpu_);
+    fft_gpu_destroy_plan(this->ifft_backward_plan_gpu_);
+    fft_gpu_destroy_plan(this->ifft_weight_plan_gpu_);
 
     this->fft_initialized_ = false;
   }
@@ -263,7 +251,7 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom) {
 #endif
   const Dtype *bottom_blob = bottom;
 
-  pad_real_blob_gpu(this->bottom_shape_, this->fft_height_, this->fft_width_, bottom_blob, this->padded_real_bottom_gpu_, this->pad_h_, this->pad_w_, false);
+  pad_real_blob_gpu(this->bottom_shape_, this->fft_height_, this->fft_width_, bottom_blob, this->padded_real_bottom_gpu_, this->pad_h_, this->pad_w_, 1, 1);
 
 #ifdef DBG_OUTPUT
   cudaEventRecord(pad_bottom, 0);
@@ -287,35 +275,44 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom) {
 #ifdef DBG_OUTPUT
   cudaEventRecord(stop, 0);
   cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, pad_bottom);
-    LOG(INFO) << this->layer_param_.name() << "| fft_bottom_gpu | padding of bottom: " << time << "ms..";
-    cudaEventElapsedTime(&time, pad_bottom, stop);
-    LOG(INFO) << this->layer_param_.name() << "| fft_bottom_gpu | fft of bottom (with permute4d if cgemm): " << time << "ms.";
+  cudaEventElapsedTime(&time, start, pad_bottom);
+  LOG(INFO) << this->layer_param_.name() << "| fft_bottom_gpu | padding of bottom: " << time << "ms..";
+  cudaEventElapsedTime(&time, pad_bottom, stop);
+  LOG(INFO) << this->layer_param_.name() << "| fft_bottom_gpu | fft of bottom (with permute4d if cgemm): " << time << "ms.";
 
-    cudaEventDestroy(start);
-    cudaEventDestroy(pad_bottom);
-    cudaEventDestroy(stop);
+  cudaEventDestroy(start);
+  cudaEventDestroy(pad_bottom);
+  cudaEventDestroy(stop);
+#endif
+}
+
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_top_gpu(const Dtype *top) {
+  const Dtype *top_blob = top;
+
+  pad_real_blob_gpu(this->top_shape_, this->fft_height_, this->fft_width_, top_blob, this->fft_convolution_result_real_gpu_, 0, 0,
+                    this->stride_h_, this->stride_w_);
+
+  // Execute fft bottom plan
+  fft_gpu_execute_plan_r2c<Dtype>(this->fft_top_plan_gpu_, this->fft_convolution_result_real_gpu_, this->ptwise_result_gpu_);
+
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  // transpose input if cgemm pt-wise product should be done
+  std::complex<Dtype> *fft_transposed_top;
+  CUDA_CHECK(cudaMalloc(&fft_transposed_top, this->padded_top_complex_size_));
+  const int shape_top[] = {this->num_, this->num_output_, this->fft_height_, (this->fft_width_ / 2) + 1};
+  // const int permutation_bottom[] = {2, 3, 0, 1};
+  fft_util_geam_transpose_gpu(this->ptwise_result_gpu_, fft_transposed_top, shape_top, 2);
+  CUDA_CHECK(cudaFree(this->ptwise_result_gpu_));
+  this->ptwise_result_gpu_ = fft_transposed_top;
 #endif
 }
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(Dtype *top) {
-#ifdef DBG_OUTPUT
-  float time;
-  cudaEvent_t start, memset, conv, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&memset);
-  cudaEventCreate(&conv);
-  cudaEventCreate(&stop);
-  cudaEventRecord(start, 0);
-#endif
   // alloc data for pointwise multiplication result (with channels added up) and set memory to 0
   caffe_gpu_memset(this->convolution_result_complex_size_, 0., this->ptwise_result_gpu_);
-
-#ifdef DBG_OUTPUT
-  cudaEventRecord(memset, 0);
-  cudaEventSynchronize(memset);
-#endif
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
   this->fft_pointwise_multiply_gpu();
@@ -325,40 +322,38 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(Dtype *top) {
   this->fft_pointwise_multiply_gemm_gpu();
 #endif
 
-#ifdef DBG_OUTPUT
-  cudaEventRecord(conv, 0);
-  cudaEventSynchronize(conv);
-#endif
-
-//  std::complex<Dtype> *res = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
-//  CUDA_CHECK(cudaMemcpy(res, this->ptwise_result_gpu_, this->convolution_result_complex_size_, cudaMemcpyDeviceToHost));
-//  std::stringstream ss;
-//  ss << "convolved_fft_" << this->layer_param_.name() << ".txt";
-//  const char *s = ss.str().c_str();
-//  this->write_arr_to_disk(s, this->num_output_, res, true);
-
   this->fft_normalize_gpu(top);
+}
 
-#ifdef DBG_OUTPUT
-  cudaEventRecord(stop, 0);
-  cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, memset);
-    LOG(INFO) << this->layer_param_.name() << "| fft_convolve_gpu | memset: " << time << "ms.";
-    cudaEventElapsedTime(&time, memset, conv);
-    LOG(INFO) << this->layer_param_.name() << "| fft_convolve_gpu | conv:" << time << "ms.";
-    cudaEventElapsedTime(&time, conv, stop);
-    LOG(INFO) << this->layer_param_.name() << "| fft_convolve_gpu | normalize:" << time << "ms.";
-
-    cudaEventDestroy(start);
-    cudaEventDestroy(memset);
-    cudaEventDestroy(conv);
-    cudaEventDestroy(stop);
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_convolve_backward_gpu(Dtype *bottom) {
+  // alloc data for pointwise multiplication result (with channels added up) and set memory to 0
+  caffe_gpu_memset(this->padded_bottom_complex_size_, 0., this->ffted_bottom_data_gpu_);
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
+  this->fft_pointwise_multiply_backward_gpu();
+#elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_IPP
+#warning no npp
+#elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  this->fft_pointwise_multiply_gemm_backward_gpu();
 #endif
 
-//  std::stringstream ss;
-//  ss << "convolved_fft_" << this->layer_param_.name() << ".txt";
-//  const char *s = ss.str().c_str();
-//  this->write_arr_to_disk(s, this->num_output_, res, true);
+  this->fft_normalize_backward_gpu(bottom);
+}
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_convolve_weight_gpu(Dtype *weight) {
+  // alloc data for pointwise multiplication result (with channels added up) and set memory to 0
+  caffe_gpu_memset(this->padded_weights_complex_size_, 0., this->ffted_weights_);
+
+#if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
+  //this->fft_pointwise_multiply_weight_gpu();
+#elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_IPP
+#warning no npp
+#elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  this->fft_pointwise_multiply_gemm_weight_gpu();
+#endif
+
+  this->fft_normalize_weight_gpu(weight);
 }
 
 template<typename Dtype>
@@ -370,23 +365,19 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu() {
   shape.push_back(this->fft_height_);                 //              32
   shape.push_back((this->fft_width_ / 2) + 1);        // 32 / 2 + 1 = 17
 
-#ifdef DBG_OUTPUT
-  float time;
-  cudaEvent_t start, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
-  cudaEventRecord(start, 0);
-#endif
   fft_util_pointwise_multiply_gpu<Dtype>(shape, this->group_, this->ffted_bottom_data_gpu_, this->ffted_weights_, this->ptwise_result_gpu_);
-#ifdef DBG_OUTPUT
-  cudaEventRecord(stop, 0);
-  cudaEventSynchronize(stop);
-  cudaEventElapsedTime(&time, start, stop);
-  cudaEventDestroy(start);
-  cudaEventDestroy(stop);
+}
 
-  LOG(INFO) << this->layer_param_.name() << "| fft_pointwise_multiply_gpu: " << time << "ms.";
-#endif
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_backward_gpu() {
+  vector<int> shape;
+  shape.push_back(this->num_);                        //              10 (batch size)
+  shape.push_back(this->num_output_);                 //              256
+  shape.push_back((this->channels_ / this->group_));  // 96 / 2     = 48
+  shape.push_back(this->fft_height_);                 //              32
+  shape.push_back((this->fft_width_ / 2) + 1);        // 32 / 2 + 1 = 17
+
+  fft_util_pointwise_multiply_backward_gpu<Dtype>(shape, this->group_, this->ffted_bottom_data_gpu_, this->ffted_weights_, this->ptwise_result_gpu_);
 }
 
 template<typename Dtype>
@@ -419,31 +410,27 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_npp_gpu() {
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_gpu() {
-  vector<int> shape;
-  shape.push_back(this->num_);                        //              10 (batch size)
-  shape.push_back(this->num_output_);                 //              256
-  shape.push_back((this->channels_ / this->group_));  // 96 / 2     = 48
-  shape.push_back(this->fft_height_);                 //              32
-  shape.push_back((this->fft_width_ / 2) + 1);        // 32 / 2 + 1 = 17
+  cgemm_sizes sizes = this->fft_pointwise_multiply_gemm_init_cpu(FORWARD);
 
-#ifdef DBG_OUTPUT
-  float time;
-  cudaEvent_t start, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
-  cudaEventRecord(start, 0);
-#endif
-  fft_util_pointwise_multiply_gemm_gpu<Dtype>(shape, this->group_, this->ffted_bottom_data_gpu_,
+  fft_util_pointwise_multiply_gemm_gpu<Dtype>(sizes, this->ffted_bottom_data_gpu_,
                                               this->ffted_weights_, this->ptwise_result_gpu_);
-#ifdef DBG_OUTPUT
-  cudaEventRecord(stop, 0);
-  cudaEventSynchronize(stop);
-  cudaEventElapsedTime(&time, start, stop);
-  cudaEventDestroy(start);
-  cudaEventDestroy(stop);
+}
 
-  LOG(INFO) << this->layer_param_.name() << "| fft_pointwise_multiply_gemm_gpu: " << time << "ms.";
-#endif
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_backward_gpu() {
+  cgemm_sizes sizes = this->fft_pointwise_multiply_gemm_init_cpu(BACKWARD);
+
+  fft_util_pointwise_multiply_gemm_backward_gpu<Dtype>(sizes, this->ffted_bottom_data_gpu_,
+                                                       this->ffted_weights_, this->ptwise_result_gpu_);
+}
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_weight_gpu() {
+  cgemm_sizes sizes = this->fft_pointwise_multiply_gemm_init_cpu(WEIGHT);
+
+  fft_util_pointwise_multiply_gemm_weight_gpu<Dtype>(sizes, this->ffted_bottom_data_gpu_,
+                                                     this->ffted_weights_, this->ptwise_result_gpu_);
 }
 
 template<typename Dtype>
@@ -461,7 +448,42 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(Dtype *top_data) {
 
   fft_util_normalize_gpu(shape, this->kernel_h_, this->kernel_w_, this->stride_h_, this->stride_w_, ifft_normalize_factor,
                          this->fft_height_, this->fft_width_, this->fft_convolution_result_real_gpu_, top_data);
+}
 
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_normalize_backward_gpu(Dtype *bottom) {
+  fft_gpu_execute_plan_c2r(this->ifft_backward_plan_gpu_, this->ffted_bottom_data_gpu_, this->padded_real_bottom_gpu_);
+
+  Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
+
+  vector<int> shape;
+  shape.push_back(this->num_);
+  shape.push_back(this->channels_);
+  shape.push_back(this->height_);
+  shape.push_back(this->width_);
+
+  fft_util_normalize_backward_gpu(shape, this->kernel_h_, this->kernel_w_, this->pad_h_, this->pad_w_, ifft_normalize_factor,
+                                  this->fft_height_, this->fft_width_, this->padded_real_bottom_gpu_, bottom);
+}
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_normalize_weight_gpu(Dtype *weight) {
+  Dtype *padded_real_weights_gpu;
+  CUDA_CHECK(cudaMalloc(&padded_real_weights_gpu, this->padded_weights_real_size_));
+
+  fft_gpu_execute_plan_c2r(this->ifft_weight_plan_gpu_, this->ffted_weights_, padded_real_weights_gpu);
+
+  Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
+
+  vector<int> shape;
+  shape.push_back(this->num_output_);
+  shape.push_back(this->channels_ / this->group_);
+  shape.push_back(this->kernel_h_);
+  shape.push_back(this->kernel_w_);
+
+  fft_util_normalize_weight_gpu(shape, ifft_normalize_factor,
+                                this->fft_height_, this->fft_width_, padded_real_weights_gpu, weight);
+  CUDA_CHECK(cudaFree(padded_real_weights_gpu));
 }
 
 template<typename Dtype>
@@ -471,13 +493,6 @@ void ConvolutionLayerFFT<Dtype>::mem_info_gpu() {
 
   cuMemGetInfo(&freeMem,&totalGlobalMem);
   printf("Free memory/Total memory:     %4.2f MB/%4.2f MB\n", (float)freeMem/(1024*1024), (float)totalGlobalMem/(1024*1024));
-}
-
-template<typename Dtype>
-void ConvolutionLayerFFT<Dtype>::Backward_gpu(
-    const vector<Blob<Dtype>*>& top, const vector<bool>& propagate_down,
-    const vector<Blob<Dtype>*>& bottom) {
-
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(ConvolutionLayerFFT);
@@ -505,16 +520,31 @@ template
 void ConvolutionLayerFFT<float>::fft_set_up_gpu();
 
 template
+void ConvolutionLayerFFT<float>::fft_update_weights_gpu();
+
+template
 void ConvolutionLayerFFT<float>::fft_free_weights_gpu();
 
 template
 void ConvolutionLayerFFT<float>::fft_bottom_gpu(const float *bottom);
 
 template
+void ConvolutionLayerFFT<float>::fft_top_gpu(const float *top);
+
+template
 void ConvolutionLayerFFT<float>::fft_convolve_gpu(float *top);
 
 template
+void ConvolutionLayerFFT<float>::fft_convolve_backward_gpu(float *bottom);
+
+template
+void ConvolutionLayerFFT<float>::fft_convolve_weight_gpu(float *weight);
+
+template
 void ConvolutionLayerFFT<float>::fft_pointwise_multiply_gpu();
+
+template
+void ConvolutionLayerFFT<float>::fft_pointwise_multiply_backward_gpu();
 
 template
 void ConvolutionLayerFFT<float>::fft_pointwise_multiply_npp_gpu();
@@ -523,7 +553,19 @@ template
 void ConvolutionLayerFFT<float>::fft_pointwise_multiply_gemm_gpu();
 
 template
+void ConvolutionLayerFFT<float>::fft_pointwise_multiply_gemm_backward_gpu();
+
+template
+void ConvolutionLayerFFT<float>::fft_pointwise_multiply_gemm_weight_gpu();
+
+template
 void ConvolutionLayerFFT<float>::fft_normalize_gpu(float *top_data);
+
+template
+void ConvolutionLayerFFT<float>::fft_normalize_backward_gpu(float *bottom);
+
+template
+void ConvolutionLayerFFT<float>::fft_normalize_weight_gpu(float *weight);
 
 template
 void ConvolutionLayerFFT<float>::mem_info_gpu();
@@ -539,11 +581,11 @@ void ConvolutionLayerFFT<double>::Weight_gpu_fft(const double* input, const doub
 
 template
 void ConvolutionLayerFFT<double>::Forward_gpu_fft(const vector<Blob<double>*>& bottom,
-                                                 const vector<Blob<double>*>& top);
+                                                  const vector<Blob<double>*>& top);
 
 template
 void ConvolutionLayerFFT<double>::Forward_gpu_normal(const vector<Blob<double>*>& bottom,
-                                                    const vector<Blob<double>*>& top);
+                                                     const vector<Blob<double>*>& top);
 
 template
 void ConvolutionLayerFFT<double>::Forward_gpu_fft_single(const double *bottom, double *top);
@@ -552,16 +594,31 @@ template
 void ConvolutionLayerFFT<double>::fft_set_up_gpu();
 
 template
+void ConvolutionLayerFFT<double>::fft_update_weights_gpu();
+
+template
 void ConvolutionLayerFFT<double>::fft_free_weights_gpu();
 
 template
 void ConvolutionLayerFFT<double>::fft_bottom_gpu(const double *bottom);
 
 template
+void ConvolutionLayerFFT<double>::fft_top_gpu(const double *top);
+
+template
 void ConvolutionLayerFFT<double>::fft_convolve_gpu(double *top);
 
 template
+void ConvolutionLayerFFT<double>::fft_convolve_backward_gpu(double *bottom);
+
+template
+void ConvolutionLayerFFT<double>::fft_convolve_weight_gpu(double *weight);
+
+template
 void ConvolutionLayerFFT<double>::fft_pointwise_multiply_gpu();
+
+template
+void ConvolutionLayerFFT<double>::fft_pointwise_multiply_backward_gpu();
 
 template
 void ConvolutionLayerFFT<double>::fft_pointwise_multiply_npp_gpu();
@@ -570,7 +627,19 @@ template
 void ConvolutionLayerFFT<double>::fft_pointwise_multiply_gemm_gpu();
 
 template
+void ConvolutionLayerFFT<double>::fft_pointwise_multiply_gemm_backward_gpu();
+
+template
+void ConvolutionLayerFFT<double>::fft_pointwise_multiply_gemm_weight_gpu();
+
+template
 void ConvolutionLayerFFT<double>::fft_normalize_gpu(double *top_data);
+
+template
+void ConvolutionLayerFFT<double>::fft_normalize_backward_gpu(double *bottom);
+
+template
+void ConvolutionLayerFFT<double>::fft_normalize_weight_gpu(double *weight);
 
 template
 void ConvolutionLayerFFT<double>::mem_info_gpu();

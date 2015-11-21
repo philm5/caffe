@@ -1,5 +1,4 @@
 #include <vector>
-#include <caffe/util/fft_util.hpp>
 #include <omp.h>
 
 #include "caffe/filler.hpp"
@@ -752,50 +751,57 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu() {
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_init_cpu(PASS_TYPE pass_type) {
-  this->cgemm_H = this->fft_height_;
-  this->cgemm_W = (this->fft_width_ / 2) + 1;
-  this->cgemm_G = this->group_;
+cgemm_sizes ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_init_cpu(PASS_TYPE pass_type) {
+  cgemm_sizes sizes;
+  sizes.num = this->num_;
+  sizes.num_output = this->num_output_;
+  sizes.channels = this->channels_;
+
+  sizes.H = this->fft_height_;
+  sizes.W = (this->fft_width_ / 2) + 1;
+  sizes.G = this->group_;
 
   switch (pass_type) {
     case FORWARD:
       //                      num_output * channels / group = 96 * 3
-      this->cgemm_weight_size = this->num_output_ * (this->channels_ / this->cgemm_G);
+      sizes.weight_size = this->num_output_ * (this->channels_ / sizes.G);
       //                      num_images      * channels / G   =  1 * 3
       // if G = 2, the size is half but there are two of bottom data blob behind each other in memory. e.g.:
       // batch size = 3: three times group 1 and then three times group 2: 123|123 for each input.
-      this->cgemm_bottom_size = (this->num_ * this->channels_);
+      sizes.bottom_size = (this->num_ * this->channels_);
 
       //                      num_output * num_images       = 96 * 1
-      this->cgemm_output_size = (this->num_output_ * this->num_);
+      sizes.output_size = (this->num_output_ * this->num_);
 
-      this->cgemm_group_offset_input = this->cgemm_bottom_size / this->num_ / this->cgemm_G;
-      this->cgemm_group_offset_weight = this->cgemm_weight_size / this->cgemm_G;
-      this->cgemm_group_offset_output = this->cgemm_output_size / this->num_ / this->cgemm_G;
+      sizes.group_offset_input = sizes.bottom_size / this->num_ / sizes.G;
+      sizes.group_offset_weight = sizes.weight_size / sizes.G;
+      sizes.group_offset_output = sizes.output_size / this->num_ / sizes.G;
       break;
     case BACKWARD:
-      this->cgemm_weight_size = this->num_output_ * (this->channels_ / this->cgemm_G);
+      sizes.weight_size = this->num_output_ * (this->channels_ / sizes.G);
       // bottom and output sizes are reversed in backward pass...
-      this->cgemm_bottom_size = (this->num_output_ * this->num_);
-      this->cgemm_output_size = (this->num_ * this->channels_);
+      sizes.bottom_size = (this->num_output_ * this->num_);
+      sizes.output_size = (this->num_ * this->channels_);
 
-      this->cgemm_group_offset_input = this->cgemm_bottom_size / this->num_ / this->cgemm_G;
-      this->cgemm_group_offset_weight = this->cgemm_weight_size / this->cgemm_G;
-      this->cgemm_group_offset_output = this->cgemm_output_size / this->num_ / this->cgemm_G;
+      sizes.group_offset_input = sizes.bottom_size / this->num_ / sizes.G;
+      sizes.group_offset_weight = sizes.weight_size / sizes.G;
+      sizes.group_offset_output = sizes.output_size / this->num_ / sizes.G;
       break;
     case WEIGHT:
-      this->cgemm_weight_size = (this->num_ * this->channels_);
+      sizes.weight_size = (this->num_ * this->channels_);
       // bottom and output sizes are reversed in backward pass...
-      this->cgemm_bottom_size = (this->num_output_ * this->num_);
-      this->cgemm_output_size = this->num_output_ * (this->channels_ / this->cgemm_G);
+      sizes.bottom_size = (this->num_output_ * this->num_);
+      sizes.output_size = this->num_output_ * (this->channels_ / sizes.G);
 
-      this->cgemm_group_offset_input = this->cgemm_bottom_size / this->num_ / this->cgemm_G;
-      this->cgemm_group_offset_weight = this->cgemm_weight_size / this->num_ / this->cgemm_G;
-      this->cgemm_group_offset_output = this->cgemm_output_size  / this->cgemm_G;
+      sizes.group_offset_input = sizes.bottom_size / this->num_ / sizes.G;
+      sizes.group_offset_weight = sizes.weight_size / this->num_ / sizes.G;
+      sizes.group_offset_output = sizes.output_size  / sizes.G;
       break;
     default:
       break;
   }
+
+  return sizes;
 }
 
 template <typename Dtype>
@@ -806,27 +812,27 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
   std::complex<Dtype> *fft_transposed_result =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(alloc_size));
 
-  this->fft_pointwise_multiply_gemm_init_cpu(FORWARD);
+  cgemm_sizes sizes = this->fft_pointwise_multiply_gemm_init_cpu(FORWARD);
 
   const std::complex<Dtype> one_complex(1., 0.);
   const std::complex<Dtype> zero_complex(0., 0.);
 
   const int M = this->num_;
-  const int N = this->num_output_ / this->cgemm_G;
-  const int K = this->channels_ / this->cgemm_G;
+  const int N = this->num_output_ / sizes.G;
+  const int K = this->channels_ / sizes.G;
 
-  int array_size = this->cgemm_H * this->cgemm_W * this->cgemm_G;
+  int array_size = sizes.H * sizes.W * sizes.G;
   const std::complex<Dtype> **weight_arr = new const std::complex<Dtype> *[array_size];
   const std::complex<Dtype> **input_arr = new const std::complex<Dtype> *[array_size];
   std::complex<Dtype> **output_arr = new std::complex<Dtype> *[array_size];
 
 
   this->fft_pointwise_multiply_gemm_construct_array_cpu(this->ffted_weights_, this->ffted_bottom_data_,
-                                                        fft_transposed_result, weight_arr, input_arr, output_arr);
+                                                        fft_transposed_result, sizes, weight_arr, input_arr, output_arr);
 
-  int lda = K * this->cgemm_G;
+  int lda = K * sizes.G;
   int ldb = K; // because TransB = Trans!
-  int ldc = N * this->cgemm_G;
+  int ldc = N * sizes.G;
 
   // Do batched matrix multiplication (conjugate in forward pass)
   caffe_cpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasConjTrans, M, N, K,
@@ -837,7 +843,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
   delete[] output_arr;
 
   std::complex<Dtype> *dst = this->ptwise_result_;
-  const int shape_result[] = {this->cgemm_H, this->cgemm_W, this->num_, this->num_output_};
+  const int shape_result[] = {sizes.H, sizes.W, this->num_, this->num_output_};
 
   this->fft_geam_transpose_cpu(fft_transposed_result, dst, shape_result, 2);
   fft_cpu_free<Dtype>(fft_transposed_result);
@@ -851,28 +857,28 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_backward_cpu() {
   std::complex<Dtype> * fft_transposed_result =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(alloc_size));
 
-  this->fft_pointwise_multiply_gemm_init_cpu(BACKWARD);
+  cgemm_sizes sizes = this->fft_pointwise_multiply_gemm_init_cpu(BACKWARD);
 
   const std::complex<Dtype> one_complex(1., 0.);
   const std::complex<Dtype> zero_complex(0., 0.);
 
   // N and K are reversed in backward pass...
   const int M = this->num_;
-  const int N = this->channels_ / this->cgemm_G;
-  const int K = this->num_output_ / this->cgemm_G;
+  const int N = this->channels_ / sizes.G;
+  const int K = this->num_output_ / sizes.G;
 
-  int array_size = this->cgemm_H * this->cgemm_W * this->cgemm_G;
+  int array_size = sizes.H * sizes.W * sizes.G;
   const std::complex<Dtype> **weight_arr = new const std::complex<Dtype> *[array_size];
   const std::complex<Dtype> **input_arr = new const std::complex<Dtype> *[array_size];
   std::complex<Dtype> **output_arr = new std::complex<Dtype> *[array_size];
 
   // in the backward pass the input is ptwise_result! also output_size and bottom_size are reversed...
   this->fft_pointwise_multiply_gemm_construct_array_cpu(this->ffted_weights_, this->ptwise_result_,
-                                                        fft_transposed_result, weight_arr, input_arr, output_arr);
+                                                        fft_transposed_result, sizes, weight_arr, input_arr, output_arr);
 
-  int lda = K * this->cgemm_G; // because TransA = NoTrans!
+  int lda = K * sizes.G; // because TransA = NoTrans!
   int ldb = N; // because TransB = NoTrans!
-  int ldc = N * this->cgemm_G;
+  int ldc = N * sizes.G;
 
   // Do batched matrix multiplication (BW: NoTrans and Convolution [vs. conjugate/cross-correlation in forward pass])
   caffe_cpu_gemm_complex_batch<Dtype>(CblasNoTrans, CblasNoTrans, M, N, K,
@@ -884,7 +890,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_backward_cpu() {
 
   // The destination in backward pass is bottom_data (input in fw pass)
   std::complex<Dtype> *dst = this->ffted_bottom_data_;
-  const int shape_result[] = {this->cgemm_H, this->cgemm_W, this->num_, this->channels_};
+  const int shape_result[] = {sizes.H, sizes.W, this->num_, this->channels_};
   this->fft_geam_transpose_cpu(fft_transposed_result, dst, shape_result, 2);
   fft_cpu_free<Dtype>(fft_transposed_result);
 }
@@ -897,27 +903,27 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_weight_cpu() {
   std::complex<Dtype> * fft_transposed_result =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(alloc_size));
 
-  this->fft_pointwise_multiply_gemm_init_cpu(WEIGHT);
+  cgemm_sizes sizes = this->fft_pointwise_multiply_gemm_init_cpu(WEIGHT);
 
   const std::complex<Dtype> one_complex(1., 0.);
   const std::complex<Dtype> zero_complex(0., 0.);
 
   // In weight pass: M = N_old, N = K_old, K = M_old
-  const int M = this->num_output_ / this->cgemm_G;
-  const int N = this->channels_ / this->cgemm_G;
+  const int M = this->num_output_ / sizes.G;
+  const int N = this->channels_ / sizes.G;
   const int K = this->num_;
 
-  int array_size = this->cgemm_H * this->cgemm_W * this->cgemm_G;
+  int array_size = sizes.H * sizes.W * sizes.G;
   const std::complex<Dtype> **weight_arr = new const std::complex<Dtype> *[array_size];
   const std::complex<Dtype> **input_arr = new const std::complex<Dtype> *[array_size];
   std::complex<Dtype> **output_arr = new std::complex<Dtype> *[array_size];
 
   // in the backward pass the input is ptwise_result! also output_size and bottom_size are reversed...
   this->fft_pointwise_multiply_gemm_construct_array_cpu(this->ffted_bottom_data_, this->ptwise_result_,
-                                                        fft_transposed_result, weight_arr, input_arr, output_arr);
+                                                        fft_transposed_result, sizes, weight_arr, input_arr, output_arr);
 
-  int lda = M * this->cgemm_G;  // because TransA = Trans!
-  int ldb = N * this->cgemm_G;
+  int lda = M * sizes.G;  // because TransA = Trans!
+  int ldb = N * sizes.G;
   int ldc = N;
 
   // Do batched matrix multiplication (W: ....??)
@@ -930,7 +936,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_weight_cpu() {
 
   // The destination in backward pass is bottom_data (input in fw pass)
   std::complex<Dtype> *dst = this->ffted_weights_;
-  const int shape_result[] = {this->cgemm_H, this->cgemm_W, this->num_output_, this->channels_ / this->group_};
+  const int shape_result[] = {sizes.H, sizes.W, this->num_output_, this->channels_ / this->group_};
   this->fft_geam_transpose_cpu(fft_transposed_result, dst, shape_result, 2);
   fft_cpu_free<Dtype>(fft_transposed_result);
 }
@@ -939,21 +945,22 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_construct_array_cpu(const std::complex<Dtype> *weight_complex,
                                                                                  const std::complex<Dtype> *bottom_complex,
                                                                                  std::complex<Dtype> *fft_transposed_result,
+                                                                                 cgemm_sizes sizes,
                                                                                  const std::complex<Dtype> **weight_arr,
                                                                                  const std::complex<Dtype> **input_arr,
                                                                                  std::complex<Dtype> **output_arr) {
   int idx = 0;
 
-  for (int h = 0; h < this->cgemm_H; ++h) {
-    for (int w = 0; w < this->cgemm_W; ++w) {
-      const std::complex<Dtype> *weight = weight_complex + (h * this->cgemm_W + w ) * this->cgemm_weight_size;
-      const std::complex<Dtype> *input = bottom_complex + (h * this->cgemm_W + w ) * this->cgemm_bottom_size;
-      std::complex<Dtype> *output = fft_transposed_result + (h * this->cgemm_W + w ) * this->cgemm_output_size;
+  for (int h = 0; h < sizes.H; ++h) {
+    for (int w = 0; w < sizes.W; ++w) {
+      const std::complex<Dtype> *weight = weight_complex + (h * sizes.W + w ) * sizes.weight_size;
+      const std::complex<Dtype> *input = bottom_complex + (h * sizes.W + w ) * sizes.bottom_size;
+      std::complex<Dtype> *output = fft_transposed_result + (h * sizes.W + w ) * sizes.output_size;
 
-      for (int g = 0; g < this->cgemm_G; ++g) {
-        weight_arr[idx] = weight + g * this->cgemm_group_offset_weight;
-        input_arr[idx] = input + g * this->cgemm_group_offset_input;
-        output_arr[idx] = output + g * this->cgemm_group_offset_output;
+      for (int g = 0; g < sizes.G; ++g) {
+        weight_arr[idx] = weight + g * sizes.group_offset_weight;
+        input_arr[idx] = input + g * sizes.group_offset_input;
+        output_arr[idx] = output + g * sizes.group_offset_output;
         idx++;
       }
     }
@@ -1189,7 +1196,16 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft_single(const Dtype *bottom, Dtype *top) { NO_GPU; }
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Backward_gpu_fft(const Dtype* input, Dtype* output) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::Weight_gpu_fft(const Dtype* input, const Dtype* output, Dtype* weight) { NO_GPU; }
+
+template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_update_weights_gpu() { NO_GPU; }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_free_weights_gpu() { NO_GPU; }
@@ -1198,10 +1214,19 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom) { NO_GPU; }
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_top_gpu(const Dtype *top) { NO_GPU; }
+
+template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(Dtype *top) { NO_GPU; }
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_convolve_backward_gpu(Dtype *bottom) { NO_GPU; }
+
+template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu() { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_backward_gpu() { NO_GPU; }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_npp_gpu() { NO_GPU; }
@@ -1210,7 +1235,13 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_gpu() { NO_GPU; }
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_backward_gpu() {NO_GPU; }
+
+template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(Dtype *top_data) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_normalize_backward_gpu(Dtype *bottom) { NO_GPU; }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::mem_info_gpu() { NO_GPU; }

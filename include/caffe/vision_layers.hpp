@@ -16,6 +16,10 @@
 #include "caffe/neuron_layers.hpp"
 #include "caffe/proto/caffe.pb.h"
 
+#ifdef USE_FFT
+#include <caffe/util/fft_util.hpp>
+#endif
+
 namespace caffe {
 
 /**
@@ -186,7 +190,7 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 #define FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE 1
 #define FFT_CONVOLUTION_KIND_CGEMM 2
 
-#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
+#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_CGEMM
 
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
@@ -269,7 +273,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
    * Pointwise multiplication via gemm
    */
 
-  virtual void fft_pointwise_multiply_gemm_init_cpu(PASS_TYPE pass_type);
+  virtual cgemm_sizes fft_pointwise_multiply_gemm_init_cpu(PASS_TYPE pass_type);
 
   virtual void fft_pointwise_multiply_gemm_cpu();
 
@@ -280,6 +284,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void fft_pointwise_multiply_gemm_construct_array_cpu(const std::complex<Dtype> *weight_complex,
                                                                const std::complex<Dtype> *bottom_complex,
                                                                std::complex<Dtype> *fft_transposed_result,
+                                                               cgemm_sizes sizes,
                                                                const std::complex<Dtype> **weight_arr,
                                                                const std::complex<Dtype> **input_arr,
                                                                std::complex<Dtype> **output_arr);
@@ -321,19 +326,37 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_set_up_gpu();
 
+  virtual void fft_update_weights_gpu();
+
   virtual void fft_free_weights_gpu();
 
   virtual void fft_bottom_gpu(const Dtype *bottom);
 
+  virtual void fft_top_gpu(const Dtype *top);
+
   virtual void fft_convolve_gpu(Dtype *top);
 
+  virtual void fft_convolve_backward_gpu(Dtype *bottom);
+
+  virtual void fft_convolve_weight_gpu(Dtype *weight);
+
   virtual void fft_pointwise_multiply_gpu();
+
+  virtual void fft_pointwise_multiply_backward_gpu();
 
   virtual void fft_pointwise_multiply_npp_gpu();
 
   virtual void fft_pointwise_multiply_gemm_gpu();
 
+  virtual void fft_pointwise_multiply_gemm_backward_gpu();
+
+  virtual void fft_pointwise_multiply_gemm_weight_gpu();
+
   virtual void fft_normalize_gpu(Dtype *top_data);
+
+  virtual void fft_normalize_backward_gpu(Dtype *bottom);
+
+  virtual void fft_normalize_weight_gpu(Dtype *weight);
 
   virtual void mem_info_gpu();
 
@@ -353,18 +376,6 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   int fft_complex_size_;
   int fft_real_size_;
 
-  /**
-   * CGEMM specific fields / sizes
-   */
-  int cgemm_H;
-  int cgemm_W;
-  int cgemm_G;
-  int cgemm_weight_size;
-  int cgemm_bottom_size;
-  int cgemm_output_size;
-  int cgemm_group_offset_weight;
-  int cgemm_group_offset_input;
-  int cgemm_group_offset_output;
 
   // Allocation sizes:
   size_t padded_weights_real_size_;
@@ -384,6 +395,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   std::vector<int> bottom_shape_;
   std::vector<int> top_shape_;
 
+
   // Plans and in memory values. It is defined globally so no free and malloc has to be called all the time...
   // Both different for CPU/GPU
   void *fft_bottom_plan_;
@@ -394,11 +406,14 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   Dtype *fft_convolution_result_real_;
   Dtype *padded_real_bottom_;
   std::complex<Dtype> *ffted_bottom_data_;
-
 #ifndef CPU_ONLY
   /* GPU Stuff */
+  cufftHandle fft_weight_plan_;
   cufftHandle fft_bottom_plan_gpu_;
+  cufftHandle fft_top_plan_gpu_;
   cufftHandle ifft_plan_gpu_;
+  cufftHandle ifft_backward_plan_gpu_;
+  cufftHandle ifft_weight_plan_gpu_;
 
 
   std::complex<Dtype> *ptwise_result_gpu_;

@@ -19,7 +19,7 @@ using std::string;
 /* Pair (label, confidence) representing a prediction. */
 typedef std::pair<string, float> Prediction;
 
-const int batch = 500;
+const int batch = 10;
 
 class Classifier {
  public:
@@ -59,7 +59,7 @@ Classifier::Classifier(const string& model_file,
 //  Caffe::SetDevice(1);
 //#endif
 
-  Caffe::set_mode(Caffe::CPU);
+  Caffe::set_mode(Caffe::GPU);
 
   /* Load the network. */
   net_.reset(new Net<float>(model_file, TEST));
