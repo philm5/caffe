@@ -140,14 +140,15 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_normal(const vector<Blob<Dtype>*>& 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bottom,
                                                  const vector<Blob<Dtype>*>& top) {
+  this->fft_set_up();
+
   // the unit tests modify weights between two Forward ops by step_size to check if backward calculates the gradient correctly.
   // But since the weights are only ffted once to save compute power, changes arent reflected in the complex values (ffted ones).
   // If fft_update_weights_each_batch_ mode is on, the weights are ffted every pass!!! Costs extra computing effort if done.
   // This param should be true in the validation net while training!
   if (this->fft_update_weights_each_batch_) {
-    this->fft_free_weights_cpu();
+    this->fft_update_weights_cpu();
   }
-  this->fft_set_up();
 
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->cpu_data();
@@ -177,7 +178,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Dtype *bottom,
  */
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_set_up(bool init_weights) {
+void ConvolutionLayerFFT<Dtype>::fft_set_up() {
   // Only do the set-up if FFT mode is enabled.
   if(this->fft_on_ && !this->fft_initialized_) {
     // set fft width and height to be the image width and height (Padding and kernel size are considered!). These
@@ -248,22 +249,23 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up(bool init_weights) {
     this->fft_top_plan_ = NULL;
     this->ifft_plan_ = NULL;
 
-    if (init_weights) {
-      switch (Caffe::mode()) {
-        case Caffe::CPU:
-          this->fft_set_up_cpu();
-          this->fft_cpu_initialized_ = true;
-          break;
-        case Caffe::GPU:
+
+    switch (Caffe::mode()) {
+      case Caffe::CPU:
+        this->fft_set_up_cpu();
+        this->fft_cpu_initialized_ = true;
+        break;
+      case Caffe::GPU:
 #ifndef CPU_ONLY
-          this->fft_set_up_gpu();
-          this->fft_gpu_initialized_ = true;
+        this->fft_set_up_gpu();
+        this->fft_gpu_initialized_ = true;
+#else
+        NO_GPU;
 #endif
-          break;
-      }
+        break;
+    }
 
       this->fft_initialized_ = true;
-    }
   }
 }
 
@@ -285,6 +287,26 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_cpu() {
   fft_cpu_plan_with_nthreads<Dtype>(this->num_threads_);
 #endif
 
+
+  // init the weights...
+  this->fft_update_weights_cpu();
+
+  // Allocate the real and complex memory for the bottom data
+  this->padded_real_bottom_ =
+      reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_bottom_real_size_));
+
+  this->ffted_bottom_data_ =
+      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_bottom_complex_size_));
+
+  this->fft_convolution_result_real_ =
+      reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->convolution_result_real_size_));
+
+  this->ptwise_result_ =
+      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
+}
+
+template<typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_update_weights_cpu() {
   Dtype *padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_weights_real_size_));
 
   // get the pointer to the weights
@@ -316,19 +338,6 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_cpu() {
   fft_cpu_destroy_plan<Dtype>(fft_weight_plan);
   // free the padded real weights. There is no need for them anymore. TODO: Also free weights in blobs_[0] ???
   fft_cpu_free<Dtype>(padded_real_weights);
-
-  // Allocate the real and complex memory for the bottom data
-  this->padded_real_bottom_ =
-      reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_bottom_real_size_));
-
-  this->ffted_bottom_data_ =
-      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_bottom_complex_size_));
-
-  this->fft_convolution_result_real_ =
-      reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->convolution_result_real_size_));
-
-  this->ptwise_result_ =
-      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   // transpose weights if cgemm pt-wise product should be done

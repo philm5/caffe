@@ -230,7 +230,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void Forward_cpu_fft_single(const Dtype *bottom, Dtype *top);
 
-  virtual void fft_set_up(bool init_weights = true);
+  virtual void fft_set_up();
 
   virtual void fft_free_weights_cpu();
 
@@ -238,6 +238,8 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
                              int pad_h = 0, int pad_w = 0, bool flip = false, int stride_h = 1, int stride_w = 1);
 
   virtual void fft_set_up_cpu();
+
+  virtual void fft_update_weights_cpu();
 
   virtual void fft_permute_4d_cpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
                                   const int shape[4], const int permutation[4]);
@@ -346,7 +348,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_pointwise_multiply_backward_gpu();
 
-  virtual void fft_pointwise_multiply_npp_gpu();
+  virtual void fft_pointwise_multiply_weight_gpu();
 
   virtual void fft_pointwise_multiply_gemm_gpu();
 

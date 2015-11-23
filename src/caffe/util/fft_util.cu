@@ -58,8 +58,6 @@ template __global__ void pad_real_blob_gpu_kernel<double>(const int K, const int
 __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K, const int H, const int W,
                                                         const int weight_group_size, const cufftComplex *ffted_bottom_data,
                                                         const cufftComplex *weight_complex, cufftComplex *ptwise_result) {
-
-
   // blockDim (10, 256, 2) ----- (batch_size, num_output_, (H*W) / CUDA_NUM_THREADS)
   //                              x                y
   const int batch_idx = blockIdx.x;
@@ -70,9 +68,7 @@ __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K
 
 
   if (hw < H*W) {
-
-    // printf("<<<%i, %i>>>| n: %i k: %i K: %i\n", blockIdx.x, threadIdx.x, n, k, K);
-    // check which group_ idx we are in
+    // check which group_idx we are in
     const int group_idx = n / weight_group_size;
     const int group = (N / weight_group_size);
 
@@ -107,13 +103,51 @@ __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K
 __global__ void fft_pointwise_multiply_double_gpu_kernel(const int N, const int K, const int H, const int W,
                                                          const int weight_group_size, const cufftDoubleComplex *ffted_bottom_data,
                                                          const cufftDoubleComplex *weight_complex, cufftDoubleComplex *ptwise_result) {
-#warning IMPLEMENT !!!
+  // blockDim (10, 256, 2) ----- (batch_size, num_output_, (H*W) / CUDA_NUM_THREADS)
+  //                              x                y
+  const int batch_idx = blockIdx.x;
+  const int n = blockIdx.y;
+
+  // calculate the channel index. blockIdx.y is of size (H*W/CUDA_NUM_THREADS). So 1 or 2...
+  const int hw = blockIdx.z * blockDim.x + threadIdx.x;
+
+
+  if (hw < H*W) {
+    // check which group_idx we are in
+    const int group_idx = n / weight_group_size;
+    const int group = (N / weight_group_size);
+
+    // offset bottom to batch_idx image
+    const int bottom_offset = K * group * H * W * batch_idx;
+    const cufftDoubleComplex *bottom_data = ffted_bottom_data + bottom_offset;
+
+    // offset res to batch_idx image
+    const int res_offset = N * H * W * batch_idx;
+    cufftDoubleComplex *res_data = ptwise_result + res_offset;
+
+    // loop over channels
+    for (int k = 0; k < K; ++k) {
+      // get the input_k. this is the k we use to index the input k-dimension. the max input_k is group_ times more
+      // than the max k of the weight.
+      const int input_k = k + group_idx * K;
+      const int weight_offset = (n * K + k);
+
+      const int input_idx = input_k * H * W + hw;
+      const cufftDoubleComplex input = bottom_data[input_idx];
+
+      const int weight_idx = weight_offset * H * W + hw;
+      const cufftDoubleComplex weight = weight_complex[weight_idx];
+
+      const int res_idx = n * H * W + hw;
+
+      fft_gpu_zmultiply_add(input, weight, res_data + res_idx, true);
+    }
+  }
 }
 
 __global__ void fft_pointwise_multiply_backward_float_gpu_kernel(const int N, const int K, const int H, const int W,
                                                                  const int weight_group_size, cufftComplex *ffted_bottom_data,
                                                                  const cufftComplex *weight_complex, const cufftComplex *ptwise_result) {
-
 
   // blockDim (10, 256, 2) ----- (batch_size, num_output_, (H*W) / CUDA_NUM_THREADS)
   //                              x                y
@@ -125,9 +159,7 @@ __global__ void fft_pointwise_multiply_backward_float_gpu_kernel(const int N, co
 
 
   if (hw < H*W) {
-
-    // printf("<<<%i, %i>>>| n: %i k: %i K: %i\n", blockIdx.x, threadIdx.x, n, k, K);
-    // check which group_ idx we are in
+    // check which group_idx we are in
     const int group = (N / weight_group_size);
 
     // offset bottom to batch_idx image
@@ -159,102 +191,143 @@ __global__ void fft_pointwise_multiply_backward_float_gpu_kernel(const int N, co
   }
 }
 
+
 __global__ void fft_pointwise_multiply_backward_double_gpu_kernel(const int N, const int K, const int H, const int W,
                                                                   const int weight_group_size, cufftDoubleComplex *ffted_bottom_data,
                                                                   const cufftDoubleComplex *weight_complex, const cufftDoubleComplex *ptwise_result) {
-#warning IMPLEMENT !!!
-}
 
-template <typename Dtype>
-__global__ void fft_util_normalize_gpu_kernel(const int N, const int H, const int W, const int kernel_h,
-                                              const int kernel_w, const int stride_h, const int stride_w,
-                                              Dtype normalize_factor, int fft_height, int fft_width,
-                                              const Dtype *fft_convolution_result_real, Dtype *top_data) {
 
-  // blockDim (256, 1) ----- (num_output_, (height_out) / CUDA_NUM_THREADS)
-  //                              x                y
-  const int batch_idx = blockIdx.x;
-  const int n = blockIdx.y;
-
-  // calculate the height index. The blockIdx.y is usually zero. Because CUDA_THREADS = 512 > 27 = ch/gr. (27 / 512) + 1 = 1.
-  const int hw = blockIdx.z * blockDim.x + threadIdx.x;
-
-  if (hw < H*W) {
-    const int fft_real_size = fft_height * fft_width;
-    const int offset_res_real = (batch_idx * N + n) * fft_real_size;
-    const int h = hw / W;
-    const int w = hw % W;
-
-    // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
-    // idx (kernel_h_ - 1). The stride times the idx of the output pixel will be added onto this.
-    const int h_idx = 0 + h * stride_h;
-
-    // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
-    // idx (kernel_w_ - 1). The stride times the idx of the output pixel will be added onto this.
-    const int w_idx = 0 + w * stride_w;
-    //((n * K + k) * H + h) * W + w;
-    const int top_data_idx = ((batch_idx * N + n) * H + h) * W + w;
-
-    // the index in the data of the convolution result array (the real one)
-    const int res_data_idx = offset_res_real + h_idx * fft_width + w_idx;
-
-    // normalize fft and sum up everything from the input channels...
-    top_data[top_data_idx] = fft_convolution_result_real[res_data_idx] * normalize_factor;
-  }
-}
-
-template __global__ void fft_util_normalize_gpu_kernel<float>(const int N, const int H, const int W, const int kernel_h,
-                                                              const int kernel_w, const int stride_h, const int stride_w,
-                                                              float normalize_factor, int fft_height, int fft_width,
-                                                              const float *fft_convolution_result_real, float *top_data);
-
-template __global__ void fft_util_normalize_gpu_kernel<double>(const int N, const int H, const int W, const int kernel_h,
-                                                               const int kernel_w, const int stride_h, const int stride_w,
-                                                               double normalize_factor, int fft_height, int fft_width,
-                                                               const double *fft_convolution_result_real, double *top_data);
-
-template <typename Dtype>
-__global__ void fft_util_normalize_backward_gpu_kernel(const int K, const int H, const int W, const int kernel_h,
-                                                       const int kernel_w, const int pad_h, const int pad_w,
-                                                       Dtype normalize_factor, int fft_height, int fft_width,
-                                                       const Dtype *padded_real_bottom, Dtype *bottom) {
-
-  // blockDim (256, 1) ----- (num_output_, (height_out) / CUDA_NUM_THREADS)
+  // blockDim (10, 256, 2) ----- (batch_size, num_output_, (H*W) / CUDA_NUM_THREADS)
   //                              x                y
   const int batch_idx = blockIdx.x;
   const int k = blockIdx.y;
 
-  // calculate the height index. The blockIdx.y is usually zero. Because CUDA_THREADS = 512 > 27 = ch/gr. (27 / 512) + 1 = 1.
+  // calculate the channel index. blockIdx.y is of size (H*W/CUDA_NUM_THREADS). So 1 or 2...
   const int hw = blockIdx.z * blockDim.x + threadIdx.x;
 
+
   if (hw < H*W) {
-    const int fft_real_size = fft_height * fft_width;
-    const int offset_bottom_padded = (batch_idx * K + k) * fft_real_size;
-    const int h = hw / W;
-    const int w = hw % W;
+    // check which group_idx we are in
+    const int group = (N / weight_group_size);
 
-    const int bottom_idx = ((batch_idx * K + k) * H + h) * W + w;
-    const int bottom_padded_idx = offset_bottom_padded + (h + pad_h) * fft_width + (w + pad_w);
+    // offset bottom to batch_idx image
+    const int bottom_offset = K * group * H * W * batch_idx;
+    cufftDoubleComplex *bottom_data = ffted_bottom_data + bottom_offset;
 
-    // normalize fft and sum up everything from the input channels...
-    bottom[bottom_idx] = padded_real_bottom[bottom_padded_idx] * normalize_factor;
+    // offset res to batch_idx image
+    const int res_offset = N * H * W * batch_idx;
+    const cufftDoubleComplex *res_data = ptwise_result + res_offset;
+
+    // loop over num_output [this loop cannot be parallelized]
+    for (int n = 0; n < N; ++n) {
+      // check wich group_idx we are in
+      const int group_idx = n / weight_group_size;
+
+      const int input_k = k + group_idx * K;
+      const int weight_offset = (n * K + k);
+
+      const int input_idx = input_k * H * W + hw;
+      const int weight_idx = weight_offset * H * W + hw;
+      const int res_idx = n * H * W + hw;
+
+
+      const cufftDoubleComplex single_input = res_data[res_idx];
+      const cufftDoubleComplex single_weight = weight_complex[weight_idx];
+
+      fft_gpu_zmultiply_add(single_input, single_weight, bottom_data + input_idx, false);
+    }
   }
 }
 
-template __global__ void fft_util_normalize_backward_gpu_kernel<float>(const int K, const int H, const int W, const int kernel_h,
-                                                                       const int kernel_w, const int pad_h, const int pad_w,
-                                                                       float normalize_factor, int fft_height, int fft_width,
-                                                                       const float *padded_real_bottom, float *bottom);
+__global__ void fft_pointwise_multiply_weight_float_gpu_kernel(const int batch_size, const int N, const int K, const int H, const int W,
+                                                               const int weight_group_size, const cufftComplex *ffted_bottom_data,
+                                                               cufftComplex *weight_complex, const cufftComplex *ptwise_result) {
+  // blockDim (10, 256, 2) ----- (batch_size, num_output_, (H*W) / CUDA_NUM_THREADS)
+  //                              x                y
+  const int n = blockIdx.x;
+  const int k = blockIdx.y;
 
-template __global__ void fft_util_normalize_backward_gpu_kernel<double>(const int K, const int H, const int W, const int kernel_h,
-                                                                        const int kernel_w, const int pad_h, const int pad_w,
-                                                                        double normalize_factor, int fft_height, int fft_width,
-                                                                        const double *padded_real_bottom, double *bottom);
+  // calculate the channel index. blockIdx.y is of size (H*W/CUDA_NUM_THREADS). So 1 or 2...
+  const int hw = blockIdx.z * blockDim.x + threadIdx.x;
+
+  if (hw < H*W) {
+    const int group = (N / weight_group_size);
+    // check wich group_idx we are in
+    const int group_idx = n / weight_group_size;
+
+    const int input_k = k + group_idx * K;
+    const int input_idx = input_k * H * W + hw;
+
+    const int top_idx = n * H * W + hw;
+    // weight is result here!!
+    const int weight_offset = (n * K + k);
+    const int weight_idx = weight_offset * H * W + hw;
+
+    // loop over num_output [this loop cannot be parallelized]
+    for (int batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+      // offset bottom to batch_idx image
+      const int bottom_offset = K * group * H * W * batch_idx;
+      const cufftComplex *bottom_data = ffted_bottom_data + bottom_offset;
+
+      // offset res to batch_idx image
+      const int top_offset = N * H * W * batch_idx;
+      const cufftComplex *top_data = ptwise_result + top_offset;
+
+      const cufftComplex single_input = bottom_data[input_idx];
+      const cufftComplex single_top = top_data[top_idx];
+
+      fft_gpu_cmultiply_add(single_input, single_top, weight_complex + weight_idx, true);
+    }
+  }
+}
+
+__global__ void fft_pointwise_multiply_weight_double_gpu_kernel(const int batch_size, const int N, const int K, const int H, const int W,
+                                                                const int weight_group_size, const cufftDoubleComplex *ffted_bottom_data,
+                                                                cufftDoubleComplex *weight_complex, const cufftDoubleComplex *ptwise_result) {
+  // blockDim (10, 256, 2) ----- (batch_size, num_output_, (H*W) / CUDA_NUM_THREADS)
+  //                              x                y
+  const int n = blockIdx.x;
+  const int k = blockIdx.y;
+
+  // calculate the channel index. blockIdx.y is of size (H*W/CUDA_NUM_THREADS). So 1 or 2...
+  const int hw = blockIdx.z * blockDim.x + threadIdx.x;
+
+  if (hw < H*W) {
+    const int group = (N / weight_group_size);
+    // check wich group_idx we are in
+    const int group_idx = n / weight_group_size;
+
+    const int input_k = k + group_idx * K;
+    const int input_idx = input_k * H * W + hw;
+
+    const int top_idx = n * H * W + hw;
+    // weight is result here!!
+    const int weight_offset = (n * K + k);
+    const int weight_idx = weight_offset * H * W + hw;
+
+    // loop over num_output [this loop cannot be parallelized]
+    for (int batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
+      // offset bottom to batch_idx image
+      const int bottom_offset = K * group * H * W * batch_idx;
+      const cufftDoubleComplex *bottom_data = ffted_bottom_data + bottom_offset;
+
+      // offset res to batch_idx image
+      const int top_offset = N * H * W * batch_idx;
+      const cufftDoubleComplex *top_data = ptwise_result + top_offset;
+
+      const cufftDoubleComplex single_input = bottom_data[input_idx];
+      const cufftDoubleComplex single_top = top_data[top_idx];
+
+      fft_gpu_zmultiply_add(single_input, single_top, weight_complex + weight_idx, true);
+    }
+  }
+}
 
 template <typename Dtype>
-__global__ void fft_util_normalize_weight_gpu_kernel(const int K, const int H, const int W, Dtype normalize_factor,
-                                                     int fft_height, int fft_width, const Dtype *padded_real_weights,
-                                                     Dtype *weight) {
+__global__ void fft_util_normalize_gpu_kernel(const int K, const int H, const int W, int fft_height, int fft_width,
+                                              const int stride_h, const int stride_w, const int pad_h, const int pad_w,
+                                              Dtype normalize_factor, const Dtype *fft_result_real,
+                                              Dtype *result, bool add_to_result) {
 
   // blockDim (256, 1) ----- (num_output_, (height_out) / CUDA_NUM_THREADS)
   //                              x                y
@@ -266,25 +339,40 @@ __global__ void fft_util_normalize_weight_gpu_kernel(const int K, const int H, c
 
   if (hw < H*W) {
     const int fft_real_size = fft_height * fft_width;
-    const int offset_weight_padded = (n * K + k) * fft_real_size;
+    const int fft_res_real_offset = (n * K + k) * fft_real_size;
     const int h = hw / W;
     const int w = hw % W;
 
-    const int weight_idx = ((n * K + k) * H + h) * W + w;
-    const int weight_padded_idx = offset_weight_padded + h * fft_width + w;
+    // The first valid result in the real conv array is @ pad_h. Every stride steps
+    // is the next valid result!
+    const int h_idx = pad_h + h * stride_h;
+    const int w_idx = pad_w + w * stride_w;
+
+    //((n * K + k) * H + h) * W + w;
+    const int result_idx = ((n * K + k) * H + h) * W + w;
+
+    // the index in the data of the convolution result array (the real one)
+    const int fft_result_real_idx = fft_res_real_offset + h_idx * fft_width + w_idx;
 
     // normalize fft and sum up everything from the input channels...
-    weight[weight_idx] += padded_real_weights[weight_padded_idx] * normalize_factor;
+    Dtype tmp_result = fft_result_real[fft_result_real_idx] * normalize_factor;
+    if (add_to_result) {
+      result[result_idx] += tmp_result;
+    } else {
+      result[result_idx] = tmp_result;
+    }
   }
 }
 
-template __global__ void fft_util_normalize_weight_gpu_kernel<float>(const int K, const int H, const int W, float normalize_factor,
-                                                                     int fft_height, int fft_width, const float *padded_real_weights,
-                                                                     float *weight);
+template __global__ void fft_util_normalize_gpu_kernel<float>(const int K, const int H, const int W, int fft_height, int fft_width,
+                                                              const int stride_h, const int stride_w, const int pad_h, const int pad_w,
+                                                              float normalize_factor, const float *fft_result_real,
+                                                              float *result, bool add_to_result);
 
-template __global__ void fft_util_normalize_weight_gpu_kernel<double>(const int K, const int H, const int W, double normalize_factor,
-                                                                     int fft_height, int fft_width, const double *padded_real_weights,
-                                                                     double *weight);
+template __global__ void fft_util_normalize_gpu_kernel<double>(const int K, const int H, const int W, int fft_height, int fft_width,
+                                                               const int stride_h, const int stride_w, const int pad_h, const int pad_w,
+                                                               double normalize_factor, const double *fft_result_real,
+                                                               double *result, bool add_to_result);
 
 template <typename Dtype>
 __global__ void fft_util_permute_4d_gpu_kernel(const std::complex<Dtype> *in, std::complex<Dtype> *out,
@@ -495,7 +583,30 @@ void fft_util_pointwise_multiply_gpu<float>(std::vector<int> shape, int group, c
 template <>
 void fft_util_pointwise_multiply_gpu<double>(std::vector<int> shape, int group, const std::complex<double> *bottom_complex,
                                              const std::complex<double> *weight_complex, std::complex<double> *ptwise_result) {
-#warning IMPLEMENT THIS METHOD!
+    const int batch_size = shape[0];
+    const int N = shape[1];
+    const int K = shape[2];
+    const int H = shape[3];
+    const int W = shape[4];
+
+    const int weight_group_size = N / group;
+
+    // N = 256 (num_output_)
+    // K = 96 / 2 (channels / group) ==> (48 / 512 ) + 1 = 1
+    // dim3 block_num(N, (K / CAFFE_CUDA_NUM_THREADS) + 1);
+
+    // N = num_output, H * W as second dim so no races happen; because over K (channels) will be summed up
+    // On thoise channels sum -ups the threads interfere with another...
+    dim3 block_num(batch_size, N, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
+    int thread_num = CAFFE_CUDA_NUM_THREADS;
+
+    const cufftDoubleComplex *ffted_bottom_data_cuda  = reinterpret_cast<const cufftDoubleComplex *> (bottom_complex);
+    const cufftDoubleComplex *weight_complex_cuda = reinterpret_cast<const cufftDoubleComplex *> (weight_complex);
+    cufftDoubleComplex *ptwise_result_cuda = reinterpret_cast<cufftDoubleComplex *> (ptwise_result);
+
+    fft_pointwise_multiply_double_gpu_kernel<<<block_num, thread_num>>>
+        (N, K, H, W, weight_group_size, ffted_bottom_data_cuda, weight_complex_cuda, ptwise_result_cuda);
+    CUDA_POST_KERNEL_CHECK;
 }
 
 template <>
@@ -525,51 +636,76 @@ void fft_util_pointwise_multiply_backward_gpu<float>(std::vector<int> shape, int
 template <>
 void fft_util_pointwise_multiply_backward_gpu<double>(std::vector<int> shape, int group, std::complex<double> *bottom_complex,
                                                       const std::complex<double> *weight_complex, const std::complex<double> *ptwise_result) {
-#warning IMPLEMENT THIS METHOD!
-}
-
-
-template <typename Dtype>
-void fft_util_pointwise_multiply_npp_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
-                                         const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result) {
-
-#warning Try Streams????
-#warning implement batch size!
-  const int N = shape[0];
-  const int K = shape[1];
-  const int H = shape[2];
-  const int W = shape[3];
+  const int batch_size = shape[0];
+  const int N = shape[1];
+  const int K = shape[2];
+  const int H = shape[3];
+  const int W = shape[4];
 
   const int weight_group_size = N / group;
-  const int fft_complex_size = H * W;
 
-  int n = 0;
-  int k = 0;
+  // K = channels, H * W as second dim so no races happen; because over N (num_output) will be summed up
+  dim3 block_num(batch_size, K, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
+  int thread_num = CAFFE_CUDA_NUM_THREADS;
 
-  for (n = 0; n < N; ++n) {
-    const int res_offset = n * fft_complex_size;
-    // check which group_ idx we are in
-    const int group_idx = n / weight_group_size;
-    for (k = 0; k < K; ++k) {
-      // get the input_k. this is the k we use to index the input k-dimension. the max input_k is group_ times more
-      // than the max k of the weight.
-      const int input_offset = (k + group_idx * K) * fft_complex_size;
-      const int weight_offset = (n * K + k) * fft_complex_size;
-      npp_complex_add_product<Dtype>(bottom_complex + input_offset, weight_complex + weight_offset,
-                                     ptwise_result + res_offset, fft_complex_size);
-    }
-  }
+  cufftDoubleComplex *ffted_bottom_data_cuda  = reinterpret_cast<cufftDoubleComplex *> (bottom_complex);
+  const cufftDoubleComplex *weight_complex_cuda = reinterpret_cast<const cufftDoubleComplex *> (weight_complex);
+  const cufftDoubleComplex *ptwise_result_cuda = reinterpret_cast<const cufftDoubleComplex *> (ptwise_result);
+
+  fft_pointwise_multiply_backward_double_gpu_kernel<<<block_num, thread_num>>>
+      (N, K, H, W, weight_group_size, ffted_bottom_data_cuda, weight_complex_cuda, ptwise_result_cuda);
+  CUDA_POST_KERNEL_CHECK;
 }
 
-template void fft_util_pointwise_multiply_npp_gpu<float>(std::vector<int> shape, int group,
-                                                         const std::complex<float> *bottom_complex,
-                                                         const std::complex<float> *weight_complex,
-                                                         std::complex<float> *ptwise_result);
 
-template void fft_util_pointwise_multiply_npp_gpu<double>(std::vector<int> shape, int group,
-                                                          const std::complex<double> *bottom_complex,
-                                                          const std::complex<double> *weight_complex,
-                                                          std::complex<double> *ptwise_result);
+template<>
+void fft_util_pointwise_multiply_weight_gpu<float>(std::vector<int> shape, int group, const std::complex<float> *bottom_complex,
+                                                   std::complex<float> *weight_complex, const std::complex<float> *ptwise_result) {
+  const int batch_size = shape[0];
+  const int N = shape[1];
+  const int K = shape[2];
+  const int H = shape[3];
+  const int W = shape[4];
+
+  const int weight_group_size = N / group;
+
+  // K = channels, H * W as second dim so no races happen; because over N (num_output) will be summed up
+  dim3 block_num(N, K, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
+  int thread_num = CAFFE_CUDA_NUM_THREADS;
+
+  const cufftComplex *ffted_bottom_data_cuda  = reinterpret_cast<const cufftComplex *> (bottom_complex);
+  cufftComplex *weight_complex_cuda = reinterpret_cast<cufftComplex *> (weight_complex);
+  const cufftComplex *ptwise_result_cuda = reinterpret_cast<const cufftComplex *> (ptwise_result);
+
+  fft_pointwise_multiply_weight_float_gpu_kernel<<<block_num, thread_num>>>
+      (batch_size, N, K, H, W, weight_group_size, ffted_bottom_data_cuda, weight_complex_cuda, ptwise_result_cuda);
+  CUDA_POST_KERNEL_CHECK;
+}
+
+
+template<>
+void fft_util_pointwise_multiply_weight_gpu<double>(std::vector<int> shape, int group, const std::complex<double> *bottom_complex,
+                                                   std::complex<double> *weight_complex, const std::complex<double> *ptwise_result) {
+  const int batch_size = shape[0];
+  const int N = shape[1];
+  const int K = shape[2];
+  const int H = shape[3];
+  const int W = shape[4];
+
+  const int weight_group_size = N / group;
+
+  // K = channels, H * W as second dim so no races happen; because over N (num_output) will be summed up
+  dim3 block_num(N, K, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
+  int thread_num = CAFFE_CUDA_NUM_THREADS;
+
+  const cufftDoubleComplex *ffted_bottom_data_cuda  = reinterpret_cast<const cufftDoubleComplex *> (bottom_complex);
+  cufftDoubleComplex *weight_complex_cuda = reinterpret_cast<cufftDoubleComplex *> (weight_complex);
+  const cufftDoubleComplex *ptwise_result_cuda = reinterpret_cast<const cufftDoubleComplex *> (ptwise_result);
+
+  fft_pointwise_multiply_weight_double_gpu_kernel<<<block_num, thread_num>>>
+      (batch_size, N, K, H, W, weight_group_size, ffted_bottom_data_cuda, weight_complex_cuda, ptwise_result_cuda);
+  CUDA_POST_KERNEL_CHECK;
+}
 
 template <typename Dtype>
 void fft_util_pointwise_multiply_gemm_gpu(cgemm_sizes sizes, const std::complex<Dtype> *bottom_complex,
@@ -741,70 +877,10 @@ template void fft_util_pointwise_multiply_gemm_weight_gpu<double>(cgemm_sizes si
                                                                   std::complex<double> *weight_complex, const std::complex<double> *ptwise_result);
 
 template <typename Dtype>
-void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,
-                            const int kernel_w, const int stride_h, const int stride_w,
-                            Dtype normalize_factor, int fft_height, int fft_width,
-                            const Dtype *conv_result_real, Dtype *top_data) {
-
-  const int batch_size = shape[0];
-  const int N = shape[1];
-  const int H = shape[2];
-  const int W = shape[3];
-
-  dim3 block_num(batch_size, N, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
-  int thread_num = CAFFE_CUDA_NUM_THREADS;
-
-  fft_util_normalize_gpu_kernel<<<block_num, thread_num>>>
-      (N, H, W, kernel_h, kernel_w, stride_h, stride_w,
-          normalize_factor, fft_height, fft_width,
-          conv_result_real, top_data);
-  CUDA_POST_KERNEL_CHECK;
-}
-
-template void fft_util_normalize_gpu<float>(std::vector<int> shape, const int kernel_h,
-                                            const int kernel_w, const int stride_h, const int stride_w,
-                                            float normalize_factor, int fft_height, int fft_width,
-                                            const float *conv_result_real, float *top_data);
-
-template void fft_util_normalize_gpu<double>(std::vector<int> shape, const int kernel_h,
-                                             const int kernel_w, const int stride_h, const int stride_w,
-                                             double normalize_factor, int fft_height, int fft_width,
-                                             const double *conv_result_real, double *top_data);
-
-template <typename Dtype>
-void fft_util_normalize_backward_gpu(std::vector<int> shape, const int kernel_h,
-                                     const int kernel_w, const int pad_h, const int pad_w,
-                                     Dtype normalize_factor, int fft_height, int fft_width,
-                                     const Dtype *padded_real_bottom, Dtype *bottom) {
-
-  const int batch_size = shape[0];
-  const int K = shape[1];
-  const int H = shape[2];
-  const int W = shape[3];
-
-  dim3 block_num(batch_size, K, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
-  int thread_num = CAFFE_CUDA_NUM_THREADS;
-
-  fft_util_normalize_backward_gpu_kernel<<<block_num, thread_num>>>
-      (K, H, W, kernel_h, kernel_w, pad_h, pad_w,
-          normalize_factor, fft_height, fft_width,
-          padded_real_bottom, bottom);
-  CUDA_POST_KERNEL_CHECK;
-}
-
-template void fft_util_normalize_backward_gpu<float>(std::vector<int> shape, const int kernel_h,
-                                                     const int kernel_w, const int pad_h, const int pad_w,
-                                                     float normalize_factor, int fft_height, int fft_width,
-                                                     const float *padded_real_bottom, float *bottom);
-
-template void fft_util_normalize_backward_gpu<double>(std::vector<int> shape, const int kernel_h,
-                                                      const int kernel_w, const int pad_h, const int pad_w,
-                                                      double normalize_factor, int fft_height, int fft_width,
-                                                      const double *padded_real_bottom, double *bottom);
-
-template <typename Dtype>
-void fft_util_normalize_weight_gpu(std::vector<int> shape, Dtype normalize_factor, int fft_height, int fft_width,
-                                   const Dtype *padded_real_weights, Dtype *weight) {
+void fft_util_normalize_gpu(std::vector<int> shape, int fft_height, int fft_width,
+                            const int stride_h, const int stride_w, const int pad_h, const int pad_w,
+                            Dtype normalize_factor, const Dtype *fft_result_real,
+                            Dtype *result, bool add_to_result) {
 
   const int N = shape[0];
   const int K = shape[1];
@@ -814,18 +890,22 @@ void fft_util_normalize_weight_gpu(std::vector<int> shape, Dtype normalize_facto
   dim3 block_num(N, K, (H * W / CAFFE_CUDA_NUM_THREADS) + 1);
   int thread_num = CAFFE_CUDA_NUM_THREADS;
 
-  fft_util_normalize_weight_gpu_kernel<<<block_num, thread_num>>>
-      (K, H, W, normalize_factor, fft_height, fft_width,
-          padded_real_weights, weight);
+  fft_util_normalize_gpu_kernel<<<block_num, thread_num>>>
+      (K, H, W, fft_height, fft_width, stride_h, stride_w,
+       pad_h, pad_w, normalize_factor, fft_result_real,
+       result, add_to_result);
   CUDA_POST_KERNEL_CHECK;
 }
 
-template void fft_util_normalize_weight_gpu<float>(std::vector<int> shape, float normalize_factor, int fft_height, int fft_width,
-                                                   const float *padded_real_weights, float *weight);
+template void fft_util_normalize_gpu<float>(std::vector<int> shape, int fft_height, int fft_width,
+                                            const int stride_h, const int stride_w, const int pad_h, const int pad_w,
+                                            float normalize_factor, const float *fft_result_real,
+                                            float *result, bool add_to_result);
 
-
-template void fft_util_normalize_weight_gpu<double>(std::vector<int> shape, double normalize_factor, int fft_height, int fft_width,
-                                                   const double *padded_real_weights, double *weight);
+template void fft_util_normalize_gpu<double>(std::vector<int> shape, int fft_height, int fft_width,
+                                             const int stride_h, const int stride_w, const int pad_h, const int pad_w,
+                                             double normalize_factor, const double *fft_result_real,
+                                             double *result, bool add_to_result);
 
 template <typename Dtype>
 void fft_util_geam_transpose_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,

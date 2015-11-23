@@ -128,8 +128,8 @@ void fft_util_pointwise_multiply_backward_gpu(std::vector<int> shape, int group,
                                               const std::complex<Dtype> *weight_complex, const std::complex<Dtype> *ptwise_result);
 
 template<typename Dtype>
-void fft_util_pointwise_multiply_npp_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
-                                         const std::complex<Dtype> *weight_complex, std::complex<Dtype> *ptwise_result);
+void fft_util_pointwise_multiply_weight_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,
+                                            std::complex<Dtype> *weight_complex, const std::complex<Dtype> *ptwise_result);
 
 template<typename Dtype>
 void fft_util_pointwise_multiply_gemm_gpu(cgemm_sizes sizes, const std::complex<Dtype> *bottom_complex,
@@ -144,21 +144,10 @@ void fft_util_pointwise_multiply_gemm_weight_gpu(cgemm_sizes sizes, const std::c
                                                  std::complex<Dtype> *weight_complex, const std::complex<Dtype> *ptwise_result);
 
 template <typename Dtype>
-void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,
-                            const int kernel_w, const int stride_h, const int stride_w,
-                            Dtype normalize_factor, int fft_height, int fft_width,
-                            const Dtype *conv_result_real, Dtype *top_data);
-
-
-template <typename Dtype>
-void fft_util_normalize_backward_gpu(std::vector<int> shape, const int kernel_h,
-                                     const int kernel_w, const int pad_h, const int pad_w,
-                                     Dtype normalize_factor, int fft_height, int fft_width,
-                                     const Dtype *padded_real_bottom, Dtype *bottom);
-
-template <typename Dtype>
-void fft_util_normalize_weight_gpu(std::vector<int> shape, Dtype normalize_factor, int fft_height, int fft_width,
-                                   const Dtype *padded_real_weights, Dtype *weight);
+void fft_util_normalize_gpu(std::vector<int> shape, int fft_height, int fft_width,
+                            const int stride_h, const int stride_w, const int pad_h, const int pad_w,
+                            Dtype normalize_factor, const Dtype *fft_result_real,
+                            Dtype *result, bool add_to_result);
 
 template <typename Dtype>
 void fft_util_geam_transpose_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,

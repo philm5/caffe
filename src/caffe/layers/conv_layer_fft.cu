@@ -161,7 +161,6 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 
   fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_weight_plan_, this->fft_height_, this->fft_width_, this->num_weights_);
 
-
   // init the weights...
   this->fft_update_weights_gpu();
 
@@ -178,7 +177,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
   CUDA_CHECK(cudaMalloc(&this->fft_convolution_result_real_gpu_, this->convolution_result_real_size_));
   CUDA_CHECK(cudaMalloc(&this->ptwise_result_gpu_, this->convolution_result_complex_size_));
 
-
+  // Init other plans
   fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_plan_gpu_, this->fft_height_, this->fft_width_, this->num_output_ * this->num_);
   fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_backward_plan_gpu_, this->fft_height_, this->fft_width_, this->channels_ * this->num_);
   fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_weight_plan_gpu_, this->fft_height_, this->fft_width_, this->num_weights_);
@@ -223,15 +222,15 @@ void ConvolutionLayerFFT<Dtype>::fft_update_weights_gpu() {
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_free_weights_gpu() {
   if (this->fft_initialized_) {
-    fft_gpu_destroy_plan(fft_weight_plan_);
-    CUDA_CHECK(cudaFree(this->ffted_weights_));
-    fft_gpu_destroy_plan(this->fft_bottom_plan_gpu_);
-    fft_gpu_destroy_plan(this->fft_top_plan_gpu_);
     CUDA_CHECK(cudaFree(this->padded_real_bottom_gpu_));
     CUDA_CHECK(cudaFree(this->ffted_bottom_data_gpu_));
+    CUDA_CHECK(cudaFree(this->ffted_weights_));
     CUDA_CHECK(cudaFree(this->ptwise_result_gpu_));
     CUDA_CHECK(cudaFree(this->fft_convolution_result_real_gpu_));
 
+    fft_gpu_destroy_plan(this->fft_weight_plan_);
+    fft_gpu_destroy_plan(this->fft_bottom_plan_gpu_);
+    fft_gpu_destroy_plan(this->fft_top_plan_gpu_);
     fft_gpu_destroy_plan(this->ifft_plan_gpu_);
     fft_gpu_destroy_plan(this->ifft_backward_plan_gpu_);
     fft_gpu_destroy_plan(this->ifft_weight_plan_gpu_);
@@ -318,7 +317,7 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_gpu(Dtype *top) {
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
   this->fft_pointwise_multiply_gpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_IPP
-  this->fft_pointwise_multiply_npp_gpu();
+  this->fft_pointwise_multiply_gpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   this->fft_pointwise_multiply_gemm_gpu();
 #endif
@@ -333,7 +332,7 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_backward_gpu(Dtype *bottom) {
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
   this->fft_pointwise_multiply_backward_gpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_IPP
-#warning no npp
+  this->fft_pointwise_multiply_backward_gpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   this->fft_pointwise_multiply_gemm_backward_gpu();
 #endif
@@ -347,9 +346,9 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_weight_gpu(Dtype *weight) {
   caffe_gpu_memset(this->padded_weights_complex_size_, 0., this->ffted_weights_);
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
-  //this->fft_pointwise_multiply_weight_gpu();
+  this->fft_pointwise_multiply_weight_gpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_IPP
-#warning no npp
+  this->fft_pointwise_multiply_weight_gpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   this->fft_pointwise_multiply_gemm_weight_gpu();
 #endif
@@ -382,31 +381,15 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_backward_gpu() {
 }
 
 template<typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_npp_gpu() {
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_weight_gpu() {
   vector<int> shape;
+  shape.push_back(this->num_);                        //              10 (batch size)
   shape.push_back(this->num_output_);                 //              256
   shape.push_back((this->channels_ / this->group_));  // 96 / 2     = 48
   shape.push_back(this->fft_height_);                 //              32
   shape.push_back((this->fft_width_ / 2) + 1);        // 32 / 2 + 1 = 17
 
-#ifdef DBG_OUTPUT
-  float time;
-  cudaEvent_t start, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&stop);
-  cudaEventRecord(start, 0);
-#endif
-  fft_util_pointwise_multiply_npp_gpu<Dtype>(shape, this->group_, this->ffted_bottom_data_gpu_,
-                                             this->ffted_weights_, this->ptwise_result_gpu_);
-#ifdef DBG_OUTPUT
-  cudaEventRecord(stop, 0);
-  cudaEventSynchronize(stop);
-  cudaEventElapsedTime(&time, start, stop);
-  cudaEventDestroy(start);
-  cudaEventDestroy(stop);
-
-  LOG(INFO) << this->layer_param_.name() << "| fft_pointwise_multiply_npp_gpu: " << time << "ms.";
-#endif
+  fft_util_pointwise_multiply_weight_gpu<Dtype>(shape, this->group_, this->ffted_bottom_data_gpu_, this->ffted_weights_, this->ptwise_result_gpu_);
 }
 
 template<typename Dtype>
@@ -447,8 +430,11 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(Dtype *top_data) {
   shape.push_back(this->height_out_);
   shape.push_back(this->width_out_);
 
-  fft_util_normalize_gpu(shape, this->kernel_h_, this->kernel_w_, this->stride_h_, this->stride_w_, ifft_normalize_factor,
-                         this->fft_height_, this->fft_width_, this->fft_convolution_result_real_gpu_, top_data);
+  fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, this->stride_h_, this->stride_w_, 0, 0,
+                         ifft_normalize_factor, this->fft_convolution_result_real_gpu_, top_data, false);
+
+//  fft_util_normalize_gpu(shape, this->kernel_h_, this->kernel_w_, this->stride_h_, this->stride_w_, ifft_normalize_factor,
+//                         this->fft_height_, this->fft_width_, this->fft_convolution_result_real_gpu_, top_data);
 }
 
 template<typename Dtype>
@@ -463,8 +449,11 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_backward_gpu(Dtype *bottom) {
   shape.push_back(this->height_);
   shape.push_back(this->width_);
 
-  fft_util_normalize_backward_gpu(shape, this->kernel_h_, this->kernel_w_, this->pad_h_, this->pad_w_, ifft_normalize_factor,
-                                  this->fft_height_, this->fft_width_, this->padded_real_bottom_gpu_, bottom);
+  fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, 1, 1, this->pad_h_, this->pad_w_, ifft_normalize_factor,
+                         this->padded_real_bottom_gpu_, bottom, false);
+
+//  fft_util_normalize_backward_gpu(shape, this->kernel_h_, this->kernel_w_, this->pad_h_, this->pad_w_, ifft_normalize_factor,
+//                                  this->fft_height_, this->fft_width_, this->padded_real_bottom_gpu_, bottom);
 }
 
 template<typename Dtype>
@@ -482,8 +471,12 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_weight_gpu(Dtype *weight) {
   shape.push_back(this->kernel_h_);
   shape.push_back(this->kernel_w_);
 
-  fft_util_normalize_weight_gpu(shape, ifft_normalize_factor,
-                                this->fft_height_, this->fft_width_, padded_real_weights_gpu, weight);
+
+  fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, 1, 1, 0, 0, ifft_normalize_factor,
+                         padded_real_weights_gpu, weight, true);
+//
+//  fft_util_normalize_weight_gpu(shape, ifft_normalize_factor,
+//                                this->fft_height_, this->fft_width_, padded_real_weights_gpu, weight);
   CUDA_CHECK(cudaFree(padded_real_weights_gpu));
 }
 
@@ -548,7 +541,7 @@ template
 void ConvolutionLayerFFT<float>::fft_pointwise_multiply_backward_gpu();
 
 template
-void ConvolutionLayerFFT<float>::fft_pointwise_multiply_npp_gpu();
+void ConvolutionLayerFFT<float>::fft_pointwise_multiply_weight_gpu();
 
 template
 void ConvolutionLayerFFT<float>::fft_pointwise_multiply_gemm_gpu();
@@ -622,7 +615,7 @@ template
 void ConvolutionLayerFFT<double>::fft_pointwise_multiply_backward_gpu();
 
 template
-void ConvolutionLayerFFT<double>::fft_pointwise_multiply_npp_gpu();
+void ConvolutionLayerFFT<double>::fft_pointwise_multiply_weight_gpu();
 
 template
 void ConvolutionLayerFFT<double>::fft_pointwise_multiply_gemm_gpu();

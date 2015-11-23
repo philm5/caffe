@@ -67,8 +67,8 @@ template <typename Dtype>
 class GPUDeviceTest : public MultiDeviceTest<GPUDevice<Dtype> > {
 };
 
-typedef ::testing::Types</*CPUDevice<float>, CPUDevice<double>,*/
-                         GPUDevice<float> /*, GPUDevice<double> */>
+typedef ::testing::Types<CPUDevice<float>, CPUDevice<double>,
+                         GPUDevice<float>, GPUDevice<double> >
                          TestDtypesAndDevices;
 
 #endif
