@@ -195,14 +195,16 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
 template <typename Dtype>
 class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
  public:
-  explicit ConvolutionLayerFFT(const LayerParameter& param, bool test_mode = false)
+  explicit ConvolutionLayerFFT(const LayerParameter& param)
       : ConvolutionLayer<Dtype>(param),
         fft_initialized_(false),
         fft_cpu_initialized_(false),
         fft_gpu_initialized_(false),
-        fft_on_(true),
-        test_mode_ (test_mode) {}
+        fft_on_(true) {}
   virtual ~ConvolutionLayerFFT();
+
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+                          const vector<Blob<Dtype>*>& top);
 
   enum PASS_TYPE { FORWARD, BACKWARD, WEIGHT };
 
@@ -369,13 +371,13 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   bool fft_initialized_;
   bool fft_cpu_initialized_;
   bool fft_gpu_initialized_;
-  bool test_mode_;
 
   int fft_height_;
   int fft_width_;
   int fft_complex_size_;
   int fft_real_size_;
 
+  bool fft_update_weights_each_batch_;
 
   // Allocation sizes:
   size_t padded_weights_real_size_;

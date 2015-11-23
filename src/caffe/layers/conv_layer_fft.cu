@@ -106,8 +106,9 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(
 
   // the unit tests modify weights between two Forward ops by step_size to check if backward calculates the gradient correctly.
   // But since the weights are only ffted once to save compute power, changes arent reflected in the complex values (ffted ones).
-  // If test mode is on, the weights are ffted every pass!!! Costs extra computing effort if done.
-  if (this->test_mode_) {
+  // If fft_update_weights_each_batch_ mode is on, the weights are ffted every pass!!! Costs extra computing effort if done.
+  // This param should be true in the validation net while training!
+  if (this->fft_update_weights_each_batch_) {
     this->fft_update_weights_gpu();
   }
 

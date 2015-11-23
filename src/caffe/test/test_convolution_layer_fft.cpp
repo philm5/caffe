@@ -156,7 +156,7 @@ TYPED_TEST(ConvolutionLayerTestFFT, TestSetup) {
   this->blob_bottom_vec_.push_back(this->blob_bottom_2_);
   this->blob_top_vec_.push_back(this->blob_top_2_);
   shared_ptr<Layer<Dtype> > layer(
-      new ConvolutionLayerFFT<Dtype>(layer_param, true));
+      new ConvolutionLayerFFT<Dtype>(layer_param));
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   EXPECT_EQ(this->blob_top_->num(), 2);
   EXPECT_EQ(this->blob_top_->channels(), 4);
@@ -169,7 +169,7 @@ TYPED_TEST(ConvolutionLayerTestFFT, TestSetup) {
   // setting group should not change the shape
   convolution_param->set_num_output(3);
   convolution_param->set_group(3);
-  layer.reset(new ConvolutionLayerFFT<Dtype>(layer_param, true));
+  layer.reset(new ConvolutionLayerFFT<Dtype>(layer_param));
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   EXPECT_EQ(this->blob_top_->num(), 2);
   EXPECT_EQ(this->blob_top_->channels(), 3);
@@ -195,7 +195,7 @@ TYPED_TEST(ConvolutionLayerTestFFT, TestSimpleConvolution) {
   convolution_param->mutable_bias_filler()->set_type("constant");
   convolution_param->mutable_bias_filler()->set_value(0.1);
   shared_ptr<Layer<Dtype> > layer(
-      new ConvolutionLayerFFT<Dtype>(layer_param, true));
+      new ConvolutionLayerFFT<Dtype>(layer_param));
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   // Check against reference convolution.
@@ -229,7 +229,7 @@ TYPED_TEST(ConvolutionLayerTestFFT, Test1x1Convolution) {
   convolution_param->mutable_bias_filler()->set_type("constant");
   convolution_param->mutable_bias_filler()->set_value(0.1);
   shared_ptr<Layer<Dtype> > layer(
-      new ConvolutionLayerFFT<Dtype>(layer_param, true));
+      new ConvolutionLayerFFT<Dtype>(layer_param));
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   // Check against reference convolution.
@@ -257,7 +257,7 @@ TYPED_TEST(ConvolutionLayerTestFFT, TestSimpleConvolutionGroup) {
   convolution_param->mutable_bias_filler()->set_type("constant");
   convolution_param->mutable_bias_filler()->set_value(0.1);
   shared_ptr<Layer<Dtype> > layer(
-      new ConvolutionLayerFFT<Dtype>(layer_param, true));
+      new ConvolutionLayerFFT<Dtype>(layer_param));
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   // Check against reference convolution.
@@ -293,7 +293,7 @@ TYPED_TEST(ConvolutionLayerTestFFT, TestSobelConvolution) {
   convolution_param->set_num_output(1);
   convolution_param->set_bias_term(false);
   shared_ptr<Layer<Dtype> > layer(
-      new ConvolutionLayerFFT<Dtype>(layer_param, true));
+      new ConvolutionLayerFFT<Dtype>(layer_param));
   layer->blobs().resize(1);
   layer->blobs()[0].reset(new Blob<Dtype>(1, 3, 3, 3));
   Dtype* weights = layer->blobs()[0]->mutable_cpu_data();
@@ -326,7 +326,7 @@ TYPED_TEST(ConvolutionLayerTestFFT, TestSobelConvolution) {
   convolution_param->set_stride_w(1);
   convolution_param->set_num_output(1);
   convolution_param->set_bias_term(false);
-  layer.reset(new ConvolutionLayerFFT<Dtype>(layer_param, true));
+  layer.reset(new ConvolutionLayerFFT<Dtype>(layer_param));
   layer->blobs().resize(1);
   layer->blobs()[0].reset(new Blob<Dtype>(1, 3, 3, 1));
   Dtype* weights_1 = layer->blobs()[0]->mutable_cpu_data();
@@ -348,7 +348,7 @@ TYPED_TEST(ConvolutionLayerTestFFT, TestSobelConvolution) {
   convolution_param->set_stride_w(2);
   convolution_param->set_num_output(1);
   convolution_param->set_bias_term(false);
-  layer.reset(new ConvolutionLayerFFT<Dtype>(layer_param, true));
+  layer.reset(new ConvolutionLayerFFT<Dtype>(layer_param));
   layer->blobs().resize(1);
   layer->blobs()[0].reset(new Blob<Dtype>(1, 3, 1, 3));
   Dtype* weights_2 = layer->blobs()[0]->mutable_cpu_data();
@@ -380,7 +380,10 @@ TYPED_TEST(ConvolutionLayerTestFFT, TestGradient) {
   convolution_param->set_num_output(2);
   convolution_param->mutable_weight_filler()->set_type("gaussian");
   convolution_param->mutable_bias_filler()->set_type("gaussian");
-  ConvolutionLayerFFT<Dtype> layer(layer_param, true);
+
+  // update the weights each batch in test mode and gradient !!!
+  convolution_param->set_fft_update_weights_each_batch(true);
+  ConvolutionLayerFFT<Dtype> layer(layer_param);
   GradientChecker<Dtype> checker(1e-2, 1e-3);
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_);
@@ -398,7 +401,10 @@ TYPED_TEST(ConvolutionLayerTestFFT, Test1x1Gradient) {
   convolution_param->set_num_output(2);
   convolution_param->mutable_weight_filler()->set_type("gaussian");
   convolution_param->mutable_bias_filler()->set_type("gaussian");
-  ConvolutionLayerFFT<Dtype> layer(layer_param, true);
+
+  // update the weights each batch in test mode and gradient !!!
+  convolution_param->set_fft_update_weights_each_batch(true);
+  ConvolutionLayerFFT<Dtype> layer(layer_param);
   GradientChecker<Dtype> checker(1e-2, 1e-3);
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_);
@@ -415,7 +421,10 @@ TYPED_TEST(ConvolutionLayerTestFFT, TestGradientGroup) {
   convolution_param->set_group(3);
   convolution_param->mutable_weight_filler()->set_type("gaussian");
   convolution_param->mutable_bias_filler()->set_type("gaussian");
-  ConvolutionLayerFFT<Dtype> layer(layer_param, true);
+
+  // update the weights each batch in test mode and gradient !!!
+  convolution_param->set_fft_update_weights_each_batch(true);
+  ConvolutionLayerFFT<Dtype> layer(layer_param);
   GradientChecker<Dtype> checker(1e-2, 1e-3);
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_);

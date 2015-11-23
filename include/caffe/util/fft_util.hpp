@@ -146,18 +146,18 @@ void fft_util_pointwise_multiply_gemm_weight_gpu(cgemm_sizes sizes, const std::c
 template <typename Dtype>
 void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,
                             const int kernel_w, const int stride_h, const int stride_w,
-                            float normalize_factor, int fft_height, int fft_width,
+                            Dtype normalize_factor, int fft_height, int fft_width,
                             const Dtype *conv_result_real, Dtype *top_data);
 
 
 template <typename Dtype>
 void fft_util_normalize_backward_gpu(std::vector<int> shape, const int kernel_h,
                                      const int kernel_w, const int pad_h, const int pad_w,
-                                     float normalize_factor, int fft_height, int fft_width,
+                                     Dtype normalize_factor, int fft_height, int fft_width,
                                      const Dtype *padded_real_bottom, Dtype *bottom);
 
 template <typename Dtype>
-void fft_util_normalize_weight_gpu(std::vector<int> shape, float normalize_factor, int fft_height, int fft_width,
+void fft_util_normalize_weight_gpu(std::vector<int> shape, Dtype normalize_factor, int fft_height, int fft_width,
                                    const Dtype *padded_real_weights, Dtype *weight);
 
 template <typename Dtype>

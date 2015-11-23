@@ -10,6 +10,18 @@
 namespace caffe {
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+                                            const vector<Blob<Dtype>*>& top) {
+  BaseConvolutionLayer<Dtype>::LayerSetUp(bottom, top);
+
+  ConvolutionParameter conv_param = this->layer_param_.convolution_param();
+
+  if (conv_param.has_fft_update_weights_each_batch()) {
+    this->fft_update_weights_each_batch_ = conv_param.fft_update_weights_each_batch();
+  }
+}
+
+template <typename Dtype>
 ConvolutionLayerFFT<Dtype>::~ConvolutionLayerFFT() {
   if (this->fft_on_) {
     if (this->fft_cpu_initialized_ == true) {
@@ -130,8 +142,9 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft(const vector<Blob<Dtype>*>& bot
                                                  const vector<Blob<Dtype>*>& top) {
   // the unit tests modify weights between two Forward ops by step_size to check if backward calculates the gradient correctly.
   // But since the weights are only ffted once to save compute power, changes arent reflected in the complex values (ffted ones).
-  // If test mode is on, the weights are ffted every pass!!! Costs extra computing effort if done.
-  if (this->test_mode_) {
+  // If fft_update_weights_each_batch_ mode is on, the weights are ffted every pass!!! Costs extra computing effort if done.
+  // This param should be true in the validation net while training!
+  if (this->fft_update_weights_each_batch_) {
     this->fft_free_weights_cpu();
   }
   this->fft_set_up();

@@ -168,7 +168,7 @@ __global__ void fft_pointwise_multiply_backward_double_gpu_kernel(const int N, c
 template <typename Dtype>
 __global__ void fft_util_normalize_gpu_kernel(const int N, const int H, const int W, const int kernel_h,
                                               const int kernel_w, const int stride_h, const int stride_w,
-                                              float normalize_factor, int fft_height, int fft_width,
+                                              Dtype normalize_factor, int fft_height, int fft_width,
                                               const Dtype *fft_convolution_result_real, Dtype *top_data) {
 
   // blockDim (256, 1) ----- (num_output_, (height_out) / CUDA_NUM_THREADS)
@@ -210,13 +210,13 @@ template __global__ void fft_util_normalize_gpu_kernel<float>(const int N, const
 
 template __global__ void fft_util_normalize_gpu_kernel<double>(const int N, const int H, const int W, const int kernel_h,
                                                                const int kernel_w, const int stride_h, const int stride_w,
-                                                               float normalize_factor, int fft_height, int fft_width,
+                                                               double normalize_factor, int fft_height, int fft_width,
                                                                const double *fft_convolution_result_real, double *top_data);
 
 template <typename Dtype>
 __global__ void fft_util_normalize_backward_gpu_kernel(const int K, const int H, const int W, const int kernel_h,
                                                        const int kernel_w, const int pad_h, const int pad_w,
-                                                       float normalize_factor, int fft_height, int fft_width,
+                                                       Dtype normalize_factor, int fft_height, int fft_width,
                                                        const Dtype *padded_real_bottom, Dtype *bottom) {
 
   // blockDim (256, 1) ----- (num_output_, (height_out) / CUDA_NUM_THREADS)
@@ -248,11 +248,11 @@ template __global__ void fft_util_normalize_backward_gpu_kernel<float>(const int
 
 template __global__ void fft_util_normalize_backward_gpu_kernel<double>(const int K, const int H, const int W, const int kernel_h,
                                                                         const int kernel_w, const int pad_h, const int pad_w,
-                                                                        float normalize_factor, int fft_height, int fft_width,
+                                                                        double normalize_factor, int fft_height, int fft_width,
                                                                         const double *padded_real_bottom, double *bottom);
 
 template <typename Dtype>
-__global__ void fft_util_normalize_weight_gpu_kernel(const int K, const int H, const int W, float normalize_factor,
+__global__ void fft_util_normalize_weight_gpu_kernel(const int K, const int H, const int W, Dtype normalize_factor,
                                                      int fft_height, int fft_width, const Dtype *padded_real_weights,
                                                      Dtype *weight) {
 
@@ -282,7 +282,7 @@ template __global__ void fft_util_normalize_weight_gpu_kernel<float>(const int K
                                                                      int fft_height, int fft_width, const float *padded_real_weights,
                                                                      float *weight);
 
-template __global__ void fft_util_normalize_weight_gpu_kernel<double>(const int K, const int H, const int W, float normalize_factor,
+template __global__ void fft_util_normalize_weight_gpu_kernel<double>(const int K, const int H, const int W, double normalize_factor,
                                                                      int fft_height, int fft_width, const double *padded_real_weights,
                                                                      double *weight);
 
@@ -743,7 +743,7 @@ template void fft_util_pointwise_multiply_gemm_weight_gpu<double>(cgemm_sizes si
 template <typename Dtype>
 void fft_util_normalize_gpu(std::vector<int> shape, const int kernel_h,
                             const int kernel_w, const int stride_h, const int stride_w,
-                            float normalize_factor, int fft_height, int fft_width,
+                            Dtype normalize_factor, int fft_height, int fft_width,
                             const Dtype *conv_result_real, Dtype *top_data) {
 
   const int batch_size = shape[0];
@@ -768,13 +768,13 @@ template void fft_util_normalize_gpu<float>(std::vector<int> shape, const int ke
 
 template void fft_util_normalize_gpu<double>(std::vector<int> shape, const int kernel_h,
                                              const int kernel_w, const int stride_h, const int stride_w,
-                                             float normalize_factor, int fft_height, int fft_width,
+                                             double normalize_factor, int fft_height, int fft_width,
                                              const double *conv_result_real, double *top_data);
 
 template <typename Dtype>
 void fft_util_normalize_backward_gpu(std::vector<int> shape, const int kernel_h,
                                      const int kernel_w, const int pad_h, const int pad_w,
-                                     float normalize_factor, int fft_height, int fft_width,
+                                     Dtype normalize_factor, int fft_height, int fft_width,
                                      const Dtype *padded_real_bottom, Dtype *bottom) {
 
   const int batch_size = shape[0];
@@ -799,11 +799,11 @@ template void fft_util_normalize_backward_gpu<float>(std::vector<int> shape, con
 
 template void fft_util_normalize_backward_gpu<double>(std::vector<int> shape, const int kernel_h,
                                                       const int kernel_w, const int pad_h, const int pad_w,
-                                                      float normalize_factor, int fft_height, int fft_width,
+                                                      double normalize_factor, int fft_height, int fft_width,
                                                       const double *padded_real_bottom, double *bottom);
 
 template <typename Dtype>
-void fft_util_normalize_weight_gpu(std::vector<int> shape, float normalize_factor, int fft_height, int fft_width,
+void fft_util_normalize_weight_gpu(std::vector<int> shape, Dtype normalize_factor, int fft_height, int fft_width,
                                    const Dtype *padded_real_weights, Dtype *weight) {
 
   const int N = shape[0];
@@ -824,7 +824,7 @@ template void fft_util_normalize_weight_gpu<float>(std::vector<int> shape, float
                                                    const float *padded_real_weights, float *weight);
 
 
-template void fft_util_normalize_weight_gpu<double>(std::vector<int> shape, float normalize_factor, int fft_height, int fft_width,
+template void fft_util_normalize_weight_gpu<double>(std::vector<int> shape, double normalize_factor, int fft_height, int fft_width,
                                                    const double *padded_real_weights, double *weight);
 
 template <typename Dtype>
