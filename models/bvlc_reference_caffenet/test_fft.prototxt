@@ -22,7 +22,7 @@ layer {
 #  }
   data_param {
     source: "/data/share/ILSVRC2012/LMDB/256x256/val"
-    batch_size: 500
+    batch_size: 22
     backend: LMDB
   }
 }

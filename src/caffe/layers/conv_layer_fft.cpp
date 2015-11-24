@@ -1,3 +1,4 @@
+#ifdef USE_FFT
 #include <vector>
 #include <omp.h>
 
@@ -176,16 +177,17 @@ void ConvolutionLayerFFT<Dtype>::Forward_cpu_fft_single(const Dtype *bottom,
 /**
  * Generic FFT Stuff:
  */
-
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_set_up() {
   // Only do the set-up if FFT mode is enabled.
   if(this->fft_on_ && !this->fft_initialized_) {
     // set fft width and height to be the image width and height (Padding and kernel size are considered!). These
-    // sizes are checked if they are a power of 2. If not, round up to the next power of 2.
+    // sizes are checked if they are a power of 2.
     int w_to_check = this->width_ + std::max(2 * this->pad_w_, (this->kernel_w_ - 1));
     int h_to_check = this->height_ + std::max(2 * this->pad_h_, (this->kernel_h_ - 1));
 
+    // Make the fft size a multiple of 16. FFTW and CUFFT perform best on FFT sizes which are factorable like this:
+    // 2^a * 3^b * 5^c * 7^d. If divisible by 4 there is extra speed up.
     if ((h_to_check % 16) > 0) {
       fft_height_ = h_to_check + (16 - (h_to_check % 16));
     }
@@ -194,6 +196,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
       fft_width_ = w_to_check + (16 - (w_to_check % 16));
     }
 
+    //  If not, round up to the next power of 2.
     //    if (!check_power_of_2(w_to_check)) {
     //      this->fft_width_ = next_power_of_2(w_to_check);
     //    }
@@ -399,6 +402,7 @@ void ConvolutionLayerFFT<Dtype>::fft_permute_4d_cpu(const std::complex<Dtype> *i
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_geam_transpose_cpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
                                                         const int shape[4], const int sep) {
+#ifdef USE_MKL
   // idea taken from fbfft paper.
   int rows = 1;
   int cols = 1;
@@ -418,7 +422,16 @@ void ConvolutionLayerFFT<Dtype>::fft_geam_transpose_cpu(const std::complex<Dtype
 
   caffe_cpu_geam_complex<Dtype>(CblasTrans, CblasNoTrans, rows, cols, &one_complex, in, cols,
                                 NULL, &zero_complex, rows, out, rows);
+#else
+#warning considers sep = 2!
+#warning much slower than with mkl. Build with MKL instead!
+  // considers sep = 2, so the seperator within a 4d array with dim-indexes 0,1,2,3 is between 1 and 2!
+  // Adapt permutation accordingly for other sep.
+  const int permutation[] = {2, 3, 0, 1};
+  this->fft_permute_4d_cpu(in, out, shape, permutation);
+#endif
 }
+
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_free_weights_cpu() {
@@ -476,7 +489,7 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Dtype *bottom) {
   std::complex<Dtype> *fft_transposed_bottom =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_bottom_complex_size_));
   const int shape_bottom[] = {this->num_, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
-  // const int permutation_bottom[] = {2, 3, 0, 1};
+
   this->fft_geam_transpose_cpu(this->ffted_bottom_data_, fft_transposed_bottom, shape_bottom, 2);
   // this->fft_permute_4d_cpu(this->ffted_bottom_data_, fft_transposed_bottom, shape_bottom, permutation_bottom);
 
@@ -521,14 +534,27 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_cpu(Dtype *top) {
   caffe_memset(this->convolution_result_complex_size_, 0., this->ptwise_result_);
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_IPP
+#ifdef USE_IPP
   this->fft_pointwise_multiply_ipp_cpu();
+#else
+  this->fft_pointwise_multiply_cpu();
+#endif
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
   this->fft_pointwise_multiply_cpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   this->fft_pointwise_multiply_gemm_cpu();
 #endif
 
-  this->fft_normalize_cpu(top);
+
+  vector<int> shape;
+  shape.push_back(this->num_);
+  shape.push_back(this->num_output_);
+  shape.push_back(this->height_out_);
+  shape.push_back(this->width_out_);
+
+  this->fft_normalize_cpu(shape, this->stride_h_, this->stride_w_, 0, 0,
+                          this->ptwise_result_, this->fft_convolution_result_real_,
+                          top, false);
 }
 
 template <typename Dtype>
@@ -541,14 +567,23 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_backward_cpu(Dtype *bottom) {
   caffe_memset(padded_bottom_complex_size_, (Dtype) 0., this->ffted_bottom_data_);
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_IPP
-#warning no ipp
+#warning no ipp implementation here!
+  this->fft_pointwise_multiply_backward_cpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
   this->fft_pointwise_multiply_backward_cpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   this->fft_pointwise_multiply_gemm_backward_cpu();
 #endif
 
-  this->fft_normalize_backward_cpu(bottom);
+  vector<int> shape;
+  shape.push_back(this->num_);
+  shape.push_back(this->channels_);
+  shape.push_back(this->height_);
+  shape.push_back(this->width_);
+
+  this->fft_normalize_cpu(shape, 1, 1, this->pad_h_, this->pad_w_,
+                          this->ffted_bottom_data_, this->padded_real_bottom_,
+                          bottom, false);
 }
 
 template <typename Dtype>
@@ -557,14 +592,26 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_weight_cpu(Dtype *weight) {
   caffe_memset(this->padded_weights_complex_size_, 0., this->ffted_weights_);
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_IPP
-#warning no ipp!
+#warning no ipp implementation here!
+  this->fft_pointwise_multiply_weight_cpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
   this->fft_pointwise_multiply_weight_cpu();
 #elif FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   this->fft_pointwise_multiply_gemm_weight_cpu();
 #endif
 
-  this->fft_normalize_weight_cpu(weight);
+  vector<int> shape;
+  shape.push_back(this->num_output_);
+  shape.push_back(this->channels_ / this->group_);
+  shape.push_back(this->kernel_h_);
+  shape.push_back(this->kernel_w_);
+
+  Dtype *padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_weights_real_size_));
+
+  this->fft_normalize_cpu(shape, 1, 1, 0, 0, this->ffted_weights_ ,
+                          padded_real_weights, weight, true);
+
+  fft_cpu_free<Dtype>(padded_real_weights);
 }
 
 template <typename Dtype>
@@ -739,7 +786,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_weight_cpu() {
   }
 }
 
-
+#ifdef USE_IPP
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu() {
   const int N = this->num_output_;
@@ -753,8 +800,7 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu() {
   std::complex<Dtype> *weight_complex = this->ffted_weights_;
 
   //#ifdef _OPENMP
-  //#pragma omp parallel for \
-  //          private(n, k) shared(bottom_complex, weight_complex, ptwise_result)
+  //#pragma omp parallel for private(n, k) shared(bottom_complex, weight_complex, ptwise_result)
   //#endif
   for (n = 0; n < N; ++n) {
     const int res_offset = n * this->fft_complex_size_;
@@ -766,11 +812,12 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_ipp_cpu() {
       const int input_offset = (k + group_idx * K) * this->fft_complex_size_;
       const int weight_offset = (n * K + k) * this->fft_complex_size_;
 
-      // pSrcDst[n ] = pSrcDst[n ] + pSrc1[n ] * pSrc2[n ], 0 ��������� n < len.
+      // pSrcDst[n ] = pSrcDst[n ] + pSrc1[n ] * pSrc2[n ], 0 ≤ n < len.
       ipp_complex_add_product<Dtype>(bottom_complex + input_offset, weight_complex + weight_offset, this->ptwise_result_ + res_offset, this->fft_complex_size_);
     }
   }
 }
+#endif
 
 template <typename Dtype>
 cgemm_sizes ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_init_cpu(PASS_TYPE pass_type) {
@@ -990,54 +1037,61 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_construct_array_cpu
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(Dtype *top_data) {
+void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::vector<int> shape, const int stride_h, const int stride_w,
+                                                   const int pad_h, const int pad_w,
+                                                   std::complex<Dtype> *ffted_result,
+                                                   Dtype *iffted_result, Dtype *result,
+                                                   bool add_to_result) {
+  const int N = shape[0];
+  const int K = shape[1];
+  const int H = shape[2];
+  const int W = shape[3];
+
+  int fft_batch_size = N * K;
 
   this->ifft_plan_ = fft_cpu_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
                                                          this->fft_width_,
-                                                         this->num_output_ * this->num_,
-                                                         this->ptwise_result_,
-                                                         this->fft_convolution_result_real_,
+                                                         fft_batch_size,
+                                                         ffted_result,
+                                                         iffted_result,
                                                          FFTW_ESTIMATE);
 
   fft_cpu_execute_plan<Dtype>(this->ifft_plan_);
-
   fft_cpu_free<Dtype>(this->ifft_plan_);
   this->ifft_plan_ = NULL;
 
   // here the stride handling and FFT normalization is happening:
   Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
-  int N = this->num_output_;
 
-  //#ifdef _OPENMP
-  //#pragma omp parallel for
-  //#endif
-  for (int batch_idx = 0; batch_idx < this->num_; ++batch_idx) {
-    for (int n = 0; n < N; ++n) {
-      const int offset_res_real = (batch_idx * N + n) * this->fft_real_size_;
+  #ifdef _OPENMP
+  #pragma omp parallel for collapse(2)
+  #endif
+  for (int n = 0; n < N; ++n) {
+    for (int k = 0; k < K; ++k) {
+      const int fft_res_real_offset = (n * K + k) * this->fft_real_size_;
 
-      for (int h = 0; h < this->height_out_; ++h) // =55 in 1st layer
+      for (int h = 0; h < H; ++h) // =55 in 1st layer
       {
-        // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
-        // idx (kernel_h_ - 1). The stride times the idx of the output pixel will be added onto this.
-        // NEW: the frist valid result is actually at 0; because now the conjugate is used. Prior
-        // we flipped the weights before zero-padding and fft-ing those.
-        int h_idx = 0 + h * this->stride_h_; // 3 ops
-
-        for (int w = 0; w < this->width_out_; ++w) // =55 in 1st layer
+        for (int w = 0; w < W; ++w) // =55 in 1st layer
         {
-          // caffe does a valid convolution. fft is a full convolution. so the first 'valid' result is at
-          // idx (kernel_w_ - 1). The stride times the idx of the output pixel will be added onto this.
-          // NEW: the frist valid result is actually at 0; because now the conjugate is used. Prior
-          // we flipped the weights before zero-padding and fft-ing those.
-          int w_idx = 0 + w * this->stride_w_; // 3 ops
+          // The first valid result in the real conv array is @ pad_h. Every stride steps
+          // is the next valid result!
+          int h_idx = pad_h + h * stride_h;
+          int w_idx = pad_w + w * stride_w;
+
           //((n * K + k) * H + h) * W + w;
-          const int top_data_idx = ((batch_idx * N + n) * this->height_out_ + h) * this->width_out_ + w;
+          const int result_idx = ((n * K + k) * H + h) * W + w;
 
           // the index in the data of the convolution result array (the real one)
-          int res_data_idx = offset_res_real + h_idx * this->fft_width_ + w_idx; // 3 ops
+          const int fft_result_real_idx = fft_res_real_offset + h_idx * this->fft_width_ + w_idx;
 
           // normalize fft and sum up everything from the input channels...
-          top_data[top_data_idx] = this->fft_convolution_result_real_[res_data_idx] * ifft_normalize_factor; // 1 op
+          Dtype tmp_result = iffted_result[fft_result_real_idx] * ifft_normalize_factor;
+          if (add_to_result) {
+            result[result_idx] += tmp_result;
+          } else {
+            result[result_idx] = tmp_result;
+          }
         }
       }
     }
@@ -1245,13 +1299,16 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_convolve_backward_gpu(Dtype *bottom) { NO_GPU; }
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_convolve_weight_gpu(Dtype *weight) { NO_GPU; }
+
+template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gpu() { NO_GPU; }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_backward_gpu() { NO_GPU; }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_npp_gpu() { NO_GPU; }
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_weight_gpu() { NO_GPU; }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_gpu() { NO_GPU; }
@@ -1260,10 +1317,16 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_backward_gpu() {NO_GPU; }
 
 template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_weight_gpu() {NO_GPU; }
+
+template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(Dtype *top_data) { NO_GPU; }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_normalize_backward_gpu(Dtype *bottom) { NO_GPU; }
+
+template <typename Dtype>
+void ConvolutionLayerFFT<Dtype>::fft_normalize_weight_gpu(Dtype *weight) { NO_GPU; }
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::mem_info_gpu() { NO_GPU; }
@@ -1272,3 +1335,4 @@ void ConvolutionLayerFFT<Dtype>::mem_info_gpu() { NO_GPU; }
 INSTANTIATE_CLASS(ConvolutionLayerFFT);
 
 }  // namespace caffe
+#endif /* USE_FFT */

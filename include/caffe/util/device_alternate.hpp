@@ -40,8 +40,10 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
 #include "caffe/util/cudnn.hpp"
 #endif
 
+#ifdef USE_FFT
 #include <cufft.h>
 #include <npp.h>
+#endif
 
 //
 // CUDA macros

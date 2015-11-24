@@ -184,6 +184,7 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
     void write_simple_arr_to_disk(const char *output_name, int size, const Dtype *arr);
 };
 
+#ifdef USE_FFT
 /* FFT convolution kind defines */
 
 #define FFT_CONVOLUTION_KIND_POINTWISE_IPP 0
@@ -267,11 +268,13 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void fft_pointwise_multiply_weight_cpu();
 
+#ifdef USE_IPP
   /**
    * Pointwise multiplication via IPP (SLOW; depreceated)
    */
 
   virtual void fft_pointwise_multiply_ipp_cpu();
+#endif
 
   /**
    * Pointwise multiplication via gemm
@@ -293,7 +296,11 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
                                                                const std::complex<Dtype> **input_arr,
                                                                std::complex<Dtype> **output_arr);
 
-  virtual void fft_normalize_cpu(Dtype *top_data);
+  virtual void fft_normalize_cpu(std::vector<int> shape, const int stride_h, const int stride_w,
+                                 const int pad_h, const int pad_w,
+                                 std::complex<Dtype> *ffted_result,
+                                 Dtype *iffted_result, Dtype *result,
+                                 bool add_to_result);
 
   virtual void fft_normalize_backward_cpu(Dtype *bottom);
 
@@ -364,15 +371,13 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   virtual void mem_info_gpu();
 
-  double start_time_;
-
   /**
    * FFT specific fields:
    */
-  bool fft_on_;
   bool fft_initialized_;
   bool fft_cpu_initialized_;
   bool fft_gpu_initialized_;
+  bool fft_on_;
 
   int fft_height_;
   int fft_width_;
@@ -426,6 +431,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   std::complex<Dtype> *ffted_bottom_data_gpu_;
 #endif
 };
+#endif /* USE_FFT */
 
 /**
  * @brief Convolve the input with a bank of learned filters, and (optionally)

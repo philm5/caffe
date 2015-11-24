@@ -1,3 +1,4 @@
+#ifdef USE_FFT
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -72,6 +73,7 @@ void caffe_complex_add<double>(const int n, const std::complex<double> *a, const
   vzAdd(n, reinterpret_cast<const MKL_Complex16 *> (a), reinterpret_cast<const MKL_Complex16 *> (b), reinterpret_cast<MKL_Complex16 *> (y));
 }
 
+#ifdef USE_IPP
 template <>
 void ipp_complex_add_product<float>(const std::complex<float> *src1, const std::complex<float> *src2, std::complex<float> *dst, int len)
 {
@@ -83,6 +85,7 @@ void ipp_complex_add_product<double>(const std::complex<double> *src1, const std
 {
   ippsAddProduct_64fc(reinterpret_cast<const Ipp64fc *> (src1), reinterpret_cast<const Ipp64fc *> (src2), reinterpret_cast<Ipp64fc *> (dst), len);
 }
+#endif
 
 template<>
 void *fft_cpu_malloc<float>(size_t n) {
@@ -306,3 +309,4 @@ void fft_cpu_free<double>(void *ptr) {
   ptr = NULL;
 }
 }
+#endif

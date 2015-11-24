@@ -1,3 +1,4 @@
+#ifdef USE_FFT
 #include <vector>
 
 #include "caffe/filler.hpp"
@@ -104,7 +105,7 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(
 
   this->fft_set_up();
 
-  // the unit tests modify weights between two Forward ops by step_size to check if backward calculates the gradient correctly.
+  // the unit tests modify weights between twno Forward ops by step_size to check if backward calculates the gradient correctly.
   // But since the weights are only ffted once to save compute power, changes arent reflected in the complex values (ffted ones).
   // If fft_update_weights_each_batch_ mode is on, the weights are ffted every pass!!! Costs extra computing effort if done.
   // This param should be true in the validation net while training!
@@ -451,9 +452,6 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_backward_gpu(Dtype *bottom) {
 
   fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, 1, 1, this->pad_h_, this->pad_w_, ifft_normalize_factor,
                          this->padded_real_bottom_gpu_, bottom, false);
-
-//  fft_util_normalize_backward_gpu(shape, this->kernel_h_, this->kernel_w_, this->pad_h_, this->pad_w_, ifft_normalize_factor,
-//                                  this->fft_height_, this->fft_width_, this->padded_real_bottom_gpu_, bottom);
 }
 
 template<typename Dtype>
@@ -474,9 +472,6 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_weight_gpu(Dtype *weight) {
 
   fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, 1, 1, 0, 0, ifft_normalize_factor,
                          padded_real_weights_gpu, weight, true);
-//
-//  fft_util_normalize_weight_gpu(shape, ifft_normalize_factor,
-//                                this->fft_height_, this->fft_width_, padded_real_weights_gpu, weight);
   CUDA_CHECK(cudaFree(padded_real_weights_gpu));
 }
 
@@ -640,3 +635,4 @@ void ConvolutionLayerFFT<double>::mem_info_gpu();
 
 
 }  // namespace caffe
+#endif /* USE_FFT */

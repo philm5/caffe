@@ -33,13 +33,14 @@ void caffe_cpu_gemm_complex_batch(const CBLAS_TRANSPOSE TransA,
                                   const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
                                   const std::complex<Dtype> *alpha, const std::complex<Dtype> **A_arr, const std::complex<Dtype> **B_arr, const std::complex<Dtype> *beta,
                                   std::complex<Dtype> **C_arr, int batch_size, int *lda = NULL, int *ldb = NULL, int *ldc = NULL);
-
+#ifdef USE_MKL
 template <typename Dtype>
 void caffe_cpu_geam_complex(const CBLAS_TRANSPOSE TransA,
                             const CBLAS_TRANSPOSE TransB, const int M, const int N,
                             std::complex<Dtype> *alpha, const std::complex<Dtype> *A, int lda,
                             const std::complex<Dtype> *B, std::complex<Dtype> *beta, int ldb,
                             std::complex<Dtype> *C, int ldc);
+#endif
 
 template <typename Dtype>
 void caffe_cpu_gemv(const CBLAS_TRANSPOSE TransA, const int M, const int N,

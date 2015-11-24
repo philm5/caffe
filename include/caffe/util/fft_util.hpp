@@ -5,6 +5,7 @@
  * Created on July 16, 2015, 2:41 PM
  */
 
+#ifdef USE_FFT
 #ifndef FFT_UTIL_HPP
 #define FFT_UTIL_HPP
 
@@ -51,8 +52,10 @@ void caffe_complex_mul(const int N, const std::complex<Dtype> *a, const std::com
 template <typename Dtype>
 void caffe_complex_add(const int N, const std::complex<Dtype> *a, const std::complex<Dtype> *b, std::complex<Dtype> *y);
 
+#ifdef USE_IPP
 template <typename Dtype>
 void ipp_complex_add_product(const std::complex<Dtype> *src1, const std::complex<Dtype> *src2, std::complex<Dtype> *dst, int len);
+#endif
 
 template<typename Dtype>
 void *fft_cpu_malloc(size_t n);
@@ -160,4 +163,5 @@ void fft_util_permute_4d_gpu(const std::complex<Dtype> *in, std::complex<Dtype> 
 
 }
 #endif	/* FFT_UTIL_HPP */
+#endif  /* USE_FFT */
 
