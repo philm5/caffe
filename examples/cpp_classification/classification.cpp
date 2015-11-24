@@ -1,25 +1,22 @@
 #include <caffe/caffe.hpp>
-#include <caffe/util/fft_util.hpp>
+#ifdef USE_OPENCV
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#endif  // USE_OPENCV
+#include <algorithm>
 #include <iosfwd>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-
-// args:
-// /home/harzigph/Documents/git/caffe/models/bvlc_reference_caffenet/deploy.prototxt /home/harzigph/Documents/git/caffe/models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel /home/harzigph/Documents/git/caffe/data/ilsvrc12/imagenet_mean.binaryproto /home/harzigph/Documents/git/caffe/data/ilsvrc12/synset_words.txt /home/harzigph/Documents/git/caffe/examples/images/cat.jpg
-
+#ifdef USE_OPENCV
 using namespace caffe;  // NOLINT(build/namespaces)
 using std::string;
 
 /* Pair (label, confidence) representing a prediction. */
 typedef std::pair<string, float> Prediction;
-
-const int batch = 10;
 
 class Classifier {
  public:
@@ -52,14 +49,11 @@ Classifier::Classifier(const string& model_file,
                        const string& trained_file,
                        const string& mean_file,
                        const string& label_file) {
-//#ifdef CPU_ONLY
-//  Caffe::set_mode(Caffe::CPU);
-//#else
-//  Caffe::set_mode(Caffe::GPU);
-//  Caffe::SetDevice(1);
-//#endif
-
+#ifdef CPU_ONLY
+  Caffe::set_mode(Caffe::CPU);
+#else
   Caffe::set_mode(Caffe::GPU);
+#endif
 
   /* Load the network. */
   net_.reset(new Net<float>(model_file, TEST));
@@ -111,6 +105,7 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 std::vector<Prediction> Classifier::Classify(const cv::Mat& img, int N) {
   std::vector<float> output = Predict(img);
 
+  N = std::min<int>(labels_.size(), N);
   std::vector<int> maxN = Argmax(output, N);
   std::vector<Prediction> predictions;
   for (int i = 0; i < N; ++i) {
@@ -154,7 +149,7 @@ void Classifier::SetMean(const string& mean_file) {
 
 std::vector<float> Classifier::Predict(const cv::Mat& img) {
   Blob<float>* input_layer = net_->input_blobs()[0];
-  input_layer->Reshape(batch, num_channels_,
+  input_layer->Reshape(1, num_channels_,
                        input_geometry_.height, input_geometry_.width);
   /* Forward dimension change to all layers. */
   net_->Reshape();
@@ -184,7 +179,7 @@ void Classifier::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
   int width = input_layer->width();
   int height = input_layer->height();
   float* input_data = input_layer->mutable_cpu_data();
-  for (int i = 0; i < input_layer->channels() * batch; ++i) {
+  for (int i = 0; i < input_layer->channels(); ++i) {
     cv::Mat channel(height, width, CV_32FC1, input_data);
     input_channels->push_back(channel);
     input_data += width * height;
@@ -224,10 +219,7 @@ void Classifier::Preprocess(const cv::Mat& img,
   /* This operation will write the separate BGR planes directly to the
    * input layer of the network because it is wrapped by the cv::Mat
    * objects in input_channels. */
-  for (int i = 0; i < batch; ++i) {
-    cv::Mat *ptr = &(input_channels->at(img.channels()*i));
-    cv::split(sample_normalized, ptr);
-  }
+  cv::split(sample_normalized, *input_channels);
 
   CHECK(reinterpret_cast<float*>(input_channels->at(0).data)
         == net_->input_blobs()[0]->cpu_data())
@@ -243,8 +235,6 @@ int main(int argc, char** argv) {
   }
 
   ::google::InitGoogleLogging(argv[0]);
-  //::google::Log
-  ::google::SetLogDestination(google::INFO, "/home/harzigph/log.txt");
 
   string model_file   = argv[1];
   string trained_file = argv[2];
@@ -267,20 +257,9 @@ int main(int argc, char** argv) {
     std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
               << p.first << "\"" << std::endl;
   }
-
-  std::vector<std::pair<std::vector<Prediction>, double> > cls_time;
-
-  // do 30 classifications:
-  for (size_t i = 0; i < 10; ++i) {
-    double start_time = cpu_time();
-    std::vector<Prediction> predictions = classifier.Classify(img);
-    double end_time = cpu_time();
-    cls_time.push_back(std::pair<std::vector<Prediction>, double>(predictions, (end_time-start_time) *1000));
-  }
-
-  for (size_t i = 0; i < cls_time.size(); ++i) {
-    std::pair<std::vector<Prediction>, double> pair = cls_time[i];
-    std::cout << std::fixed << std::setprecision(4) << pair.first[0].second << " - \""
-              << pair.first[0].first << "\" - " << pair.second << "" << std::endl;
-  }
 }
+#else
+int main(int argc, char** argv) {
+  LOG(FATAL) << "This example requires OpenCV; compile with USE_OPENCV.";
+}
+#endif  // USE_OPENCV
