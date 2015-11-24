@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include <cmath>  // for std::fabs and std::signbit
-#include <complex>
 
 #include "glog/logging.h"
 
@@ -11,6 +10,9 @@
 #include "caffe/util/device_alternate.hpp"
 #include "caffe/util/mkl_alternate.hpp"
 
+#ifdef USE_FFT
+#include <complex>
+#endif
 
 namespace caffe {
 
@@ -27,13 +29,13 @@ void caffe_cpu_gemm_complex(const CBLAS_TRANSPOSE TransA,
                             const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
                             const std::complex<Dtype> *alpha, const std::complex<Dtype> *A, const std::complex<Dtype> *B, const std::complex<Dtype> *beta,
                             std::complex<Dtype> *C);
-
+#ifdef USE_MKL
 template <typename Dtype>
 void caffe_cpu_gemm_complex_batch(const CBLAS_TRANSPOSE TransA,
                                   const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
                                   const std::complex<Dtype> *alpha, const std::complex<Dtype> **A_arr, const std::complex<Dtype> **B_arr, const std::complex<Dtype> *beta,
                                   std::complex<Dtype> **C_arr, int batch_size, int *lda = NULL, int *ldb = NULL, int *ldc = NULL);
-#ifdef USE_MKL
+
 template <typename Dtype>
 void caffe_cpu_geam_complex(const CBLAS_TRANSPOSE TransA,
                             const CBLAS_TRANSPOSE TransB, const int M, const int N,

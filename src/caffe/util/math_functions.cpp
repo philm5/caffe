@@ -39,8 +39,8 @@ void caffe_cpu_gemm_complex<float>(const CBLAS_TRANSPOSE TransA,
   int lda = (TransA == CblasNoTrans) ? K : M;
   int ldb = (TransB == CblasNoTrans) ? N : K;
 
-  cblas_cgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
-              ldb, beta, C, N);
+  cblas_cgemm(CblasRowMajor, TransA, TransB, M, N, K, reinterpret_cast<const void *>(alpha), reinterpret_cast<const void *>(A), lda,
+              reinterpret_cast<const void *>(B), ldb, reinterpret_cast<const void *>(beta), reinterpret_cast<void *>(C), N);
 }
 
 template <>
@@ -51,10 +51,11 @@ void caffe_cpu_gemm_complex<double>(const CBLAS_TRANSPOSE TransA,
   int lda = (TransA == CblasNoTrans) ? K : M;
   int ldb = (TransB == CblasNoTrans) ? N : K;
 
-  cblas_cgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
-              ldb, beta, C, N);
+  cblas_zgemm(CblasRowMajor, TransA, TransB, M, N, K, reinterpret_cast<const void *>(alpha), reinterpret_cast<const void *>(A), lda,
+              reinterpret_cast<const void *>(B), ldb, reinterpret_cast<const void *>(beta), reinterpret_cast<void *>(C), N);
 }
 
+#ifdef USE_MKL
 template <>
 void caffe_cpu_gemm_complex_batch<float>(const CBLAS_TRANSPOSE TransA,
                                          const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
@@ -85,7 +86,6 @@ void caffe_cpu_gemm_complex_batch<double>(const CBLAS_TRANSPOSE TransA,
                     &batch_size);
 }
 
-#ifdef USE_MKL
 template <>
 void caffe_cpu_geam_complex<float>(const CBLAS_TRANSPOSE TransA,
                                    const CBLAS_TRANSPOSE TransB, const int M, const int N,

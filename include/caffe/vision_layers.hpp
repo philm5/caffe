@@ -275,11 +275,10 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void fft_pointwise_multiply_ipp_cpu();
 #endif
 
+#ifdef USE_MKL
   /**
    * Pointwise multiplication via gemm
    */
-
-  virtual cgemm_sizes fft_pointwise_multiply_gemm_init_cpu(PASS_TYPE pass_type);
 
   virtual void fft_pointwise_multiply_gemm_cpu();
 
@@ -294,6 +293,10 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
                                                                const std::complex<Dtype> **weight_arr,
                                                                const std::complex<Dtype> **input_arr,
                                                                std::complex<Dtype> **output_arr);
+#endif
+
+  // this method is also used for the gpu so dont exlude it if there's no mkl!
+  virtual cgemm_sizes fft_pointwise_multiply_gemm_init_cpu(PASS_TYPE pass_type);
 
   virtual void fft_normalize_cpu(std::vector<int> shape, const int stride_h, const int stride_w,
                                  const int pad_h, const int pad_w,

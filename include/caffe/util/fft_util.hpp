@@ -12,10 +12,10 @@
 #include <fftw3.h>
 #include <complex>
 #include <vector>
-#include "caffe/util/mkl_alternate.hpp"
 #include "caffe/util/math_functions.hpp"
+#ifdef USE_IPP
 #include <ipps.h>
-
+#endif
 namespace caffe {
 double cpu_time(void);
 
@@ -45,12 +45,6 @@ struct cgemm_sizes {
   int group_offset_input;
   int group_offset_output;
 };
-
-template <typename Dtype>
-void caffe_complex_mul(const int N, const std::complex<Dtype> *a, const std::complex<Dtype> *b, std::complex<Dtype> *y);
-
-template <typename Dtype>
-void caffe_complex_add(const int N, const std::complex<Dtype> *a, const std::complex<Dtype> *b, std::complex<Dtype> *y);
 
 #ifdef USE_IPP
 template <typename Dtype>

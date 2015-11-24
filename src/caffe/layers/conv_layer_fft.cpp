@@ -8,6 +8,12 @@
 #include "caffe/util/math_functions.hpp"
 #include "caffe/vision_layers.hpp"
 
+#ifndef USE_MKL
+// cgemm_batched is not available in atlas.... perhaps in openblas???
+#undef FFT_CONVOLUTION_KIND
+#define FFT_CONVOLUTION_KIND FFT_CONVOLUTION_KIND_POINTWISE_SIMPLE
+#endif
+
 namespace caffe {
 
 template <typename Dtype>
@@ -873,6 +879,9 @@ cgemm_sizes ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_init_cpu(PAS
   return sizes;
 }
 
+#ifdef USE_MKL
+// the batched gemm calls are only available in mkl. TODO: implement loop without batching??? poor performance!
+
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_cpu() {
   // alloc data for result
@@ -1035,6 +1044,8 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_gemm_construct_array_cpu
     }
   }
 }
+
+#endif
 
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::vector<int> shape, const int stride_h, const int stride_w,

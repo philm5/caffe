@@ -48,31 +48,6 @@ void fft_cpu_cleanup_threads<double>() {
 }
 #endif
 
-
-template <>
-void caffe_complex_mul<float>(const int n, const std::complex<float> *a, const std::complex<float> *b,
-                      std::complex<float> *y) {
-  vcMul(n, reinterpret_cast<const MKL_Complex8 *> (a), reinterpret_cast<const MKL_Complex8 *> (b), reinterpret_cast<MKL_Complex8 *> (y));
-}
-
-template <>
-void caffe_complex_mul<double>(const int n, const std::complex<double> *a, const std::complex<double> *b,
-                              std::complex<double> *y) {
-  vzMul(n, reinterpret_cast<const MKL_Complex16 *> (a), reinterpret_cast<const MKL_Complex16 *> (b), reinterpret_cast<MKL_Complex16 *> (y));
-}
-
-template <>
-void caffe_complex_add<float>(const int n, const std::complex<float> *a, const std::complex<float> *b,
-                              std::complex<float> *y) {
-  vcAdd(n, reinterpret_cast<const MKL_Complex8 *> (a), reinterpret_cast<const MKL_Complex8 *> (b), reinterpret_cast<MKL_Complex8 *> (y));
-}
-
-template <>
-void caffe_complex_add<double>(const int n, const std::complex<double> *a, const std::complex<double> *b,
-                               std::complex<double> *y) {
-  vzAdd(n, reinterpret_cast<const MKL_Complex16 *> (a), reinterpret_cast<const MKL_Complex16 *> (b), reinterpret_cast<MKL_Complex16 *> (y));
-}
-
 #ifdef USE_IPP
 template <>
 void ipp_complex_add_product<float>(const std::complex<float> *src1, const std::complex<float> *src2, std::complex<float> *dst, int len)
