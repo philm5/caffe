@@ -71,6 +71,7 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
       << caffe::curandGetErrorString(status); \
   } while (0)
 
+#ifdef USE_FFT
 #define CUFFT_CHECK(condition) \
   do { \
     cufftResult_t status = condition; \
@@ -84,6 +85,7 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
     CHECK_EQ(status, NPP_SUCCESS) << " " \
       << caffe::nppGetErrorString(status); \
   } while (0)
+#endif
 
 // CUDA: grid stride looping
 #define CUDA_KERNEL_LOOP(i, n) \
@@ -99,8 +101,10 @@ namespace caffe {
 // CUDA: library error reporting.
 const char* cublasGetErrorString(cublasStatus_t error);
 const char* curandGetErrorString(curandStatus_t error);
+#ifdef USE_FFT
 const char* cufftGetErrorString(cufftResult_t error);
 const char* nppGetErrorString(NppStatus error);
+#endif
 
 // CUDA: thread number configuration.
 // Use 1024 threads per block, which requires cuda sm_2x or above,

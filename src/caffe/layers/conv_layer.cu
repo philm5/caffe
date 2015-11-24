@@ -7,6 +7,7 @@
 #include "caffe/vision_layers.hpp"
 
 namespace caffe {
+
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {

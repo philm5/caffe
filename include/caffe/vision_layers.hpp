@@ -4,8 +4,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include <complex>
-#include <caffe/util/im2col.hpp>
 
 #include "caffe/blob.hpp"
 #include "caffe/common.hpp"
@@ -18,6 +16,7 @@
 
 #ifdef USE_FFT
 #include <caffe/util/fft_util.hpp>
+#include <complex>
 #endif
 
 namespace caffe {
