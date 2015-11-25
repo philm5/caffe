@@ -38,6 +38,8 @@ void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 
   if (conv_param.has_fft_update_weights_each_batch()) {
     this->fft_update_weights_each_batch_ = conv_param.fft_update_weights_each_batch();
+  } else {
+    this->fft_update_weights_each_batch_ = false;
   }
 }
 
@@ -123,8 +125,8 @@ void ConvolutionLayerFFT<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
                                top_diff + top[i]->offset(0), weight_diff);
         }
 
-        this->fft_free_weights_cpu();
-        this->fft_set_up();
+        this->fft_update_weights_cpu();
+
         // gradient w.r.t. bottom data, if necessary.
         if (propagate_down[i]) {
           this->Backward_cpu_fft(top_diff + top[i]->offset(0),
