@@ -108,7 +108,6 @@ void ConvolutionLayerFFT<Dtype>::Forward_gpu_fft(
   // the unit tests modify weights between twno Forward ops by step_size to check if backward calculates the gradient correctly.
   // But since the weights are only ffted once to save compute power, changes arent reflected in the complex values (ffted ones).
   // If fft_update_weights_each_batch_ mode is on, the weights are ffted every pass!!! Costs extra computing effort if done.
-  // This param should be true in the validation net while training!
   if (this->fft_update_weights_each_batch_) {
     this->fft_update_weights_gpu();
   }
@@ -193,8 +192,8 @@ void ConvolutionLayerFFT<Dtype>::fft_update_weights_gpu() {
   vector<int> shape;
   shape.push_back(this->num_output_);
   shape.push_back((this->channels_ / this->group_));
-  shape.push_back(this->kernel_h_);
-  shape.push_back(this->kernel_w_);
+  shape.push_back(this->kernel_shape_.cpu_data()[0]);
+  shape.push_back(this->kernel_shape_.cpu_data()[1]);
 
   // weights do not have to be padded (only 0-padded). But the weights have to be flipped, since the convolution is actually a
   // cross-correlation.
@@ -252,7 +251,7 @@ void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom) {
 #endif
   const Dtype *bottom_blob = bottom;
 
-  pad_real_blob_gpu(this->bottom_shape_, this->fft_height_, this->fft_width_, bottom_blob, this->padded_real_bottom_gpu_, this->pad_h_, this->pad_w_, 1, 1);
+  pad_real_blob_gpu(*this->bottom_shape_, this->fft_height_, this->fft_width_, bottom_blob, this->padded_real_bottom_gpu_, this->pad_.cpu_data()[0], this->pad_.cpu_data()[1], 1, 1);
 
 #ifdef DBG_OUTPUT
   cudaEventRecord(pad_bottom, 0);
@@ -293,7 +292,7 @@ void ConvolutionLayerFFT<Dtype>::fft_top_gpu(const Dtype *top) {
   const Dtype *top_blob = top;
 
   pad_real_blob_gpu(this->top_shape_, this->fft_height_, this->fft_width_, top_blob, this->fft_convolution_result_real_gpu_, 0, 0,
-                    this->stride_h_, this->stride_w_);
+                    this->stride_.cpu_data()[0], this->stride_.cpu_data()[1]);
 
   // Execute fft bottom plan
   fft_gpu_execute_plan_r2c<Dtype>(this->fft_top_plan_gpu_, this->fft_convolution_result_real_gpu_, this->ptwise_result_gpu_);
@@ -428,14 +427,11 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(Dtype *top_data) {
   vector<int> shape;
   shape.push_back(this->num_);
   shape.push_back(this->num_output_);
-  shape.push_back(this->height_out_);
-  shape.push_back(this->width_out_);
+  shape.push_back(this->output_shape_[0]);
+  shape.push_back(this->output_shape_[1]);
 
-  fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, this->stride_h_, this->stride_w_, 0, 0,
+  fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, this->stride_.cpu_data()[0], this->stride_.cpu_data()[1], 0, 0,
                          ifft_normalize_factor, this->fft_convolution_result_real_gpu_, top_data, false);
-
-//  fft_util_normalize_gpu(shape, this->kernel_h_, this->kernel_w_, this->stride_h_, this->stride_w_, ifft_normalize_factor,
-//                         this->fft_height_, this->fft_width_, this->fft_convolution_result_real_gpu_, top_data);
 }
 
 template<typename Dtype>
@@ -447,10 +443,10 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_backward_gpu(Dtype *bottom) {
   vector<int> shape;
   shape.push_back(this->num_);
   shape.push_back(this->channels_);
-  shape.push_back(this->height_);
-  shape.push_back(this->width_);
+  shape.push_back(this->input_shape(1));
+  shape.push_back(this->input_shape(2));
 
-  fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, 1, 1, this->pad_h_, this->pad_w_, ifft_normalize_factor,
+  fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, 1, 1, this->pad_.cpu_data()[0], this->pad_.cpu_data()[1], ifft_normalize_factor,
                          this->padded_real_bottom_gpu_, bottom, false);
 }
 
@@ -466,8 +462,8 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_weight_gpu(Dtype *weight) {
   vector<int> shape;
   shape.push_back(this->num_output_);
   shape.push_back(this->channels_ / this->group_);
-  shape.push_back(this->kernel_h_);
-  shape.push_back(this->kernel_w_);
+  shape.push_back(this->kernel_shape_.cpu_data()[0]);
+  shape.push_back(this->kernel_shape_.cpu_data()[1]);
 
 
   fft_util_normalize_gpu(shape, this->fft_height_, this->fft_width_, 1, 1, 0, 0, ifft_normalize_factor,

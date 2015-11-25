@@ -93,6 +93,11 @@ class Layer {
       const vector<Blob<Dtype>*>& top) {}
 
   /**
+   * @brief Updates a layer before a new batch. Needed for updating weights in the FFT-Layer
+   */
+  virtual void LayerUpdateBeforeBatch() {}
+
+  /**
    * @brief Whether a layer should be shared by multiple nets during data
    *        parallelism. By default, all layers except for data layers should
    *        not be shared. data layers should be shared to ensure each worker

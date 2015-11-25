@@ -32,6 +32,11 @@ class Net {
   void Init(const NetParameter& param);
 
   /**
+   * @brief Updates all layers before a new batch. Needed for updating weights in the FFT-Layer
+   */
+  virtual void UpdateBeforeBatch();
+
+  /**
    * @brief Run Forward with the input Blob%s already fed separately.
    *
    * You can get the input blobs using input_blobs().

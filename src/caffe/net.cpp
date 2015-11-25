@@ -284,6 +284,13 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
 }
 
 template <typename Dtype>
+void Net<Dtype>::UpdateBeforeBatch() {
+  for (int layer_id = 0; layer_id < this->layers_.size(); ++layer_id) {
+    this->layers_[0]->LayerUpdateBeforeBatch();
+  }
+}
+
+template <typename Dtype>
 void Net<Dtype>::FilterNet(const NetParameter& param,
     NetParameter* param_filtered) {
   NetState net_state(param.state());

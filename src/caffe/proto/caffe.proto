@@ -532,7 +532,7 @@ message ConvolutionParameter {
 
   optional FillerParameter weight_filler = 7; // The filler for the weight
   optional FillerParameter bias_filler = 8; // The filler for the bias
-  optional bool fft_update_weights_each_batch = 16 [default = false];
+  optional bool fft_update_weights_each_batch = 18 [default = false];
   enum Engine {
     DEFAULT = 0;
     CAFFE = 1;

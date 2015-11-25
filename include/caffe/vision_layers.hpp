@@ -264,6 +264,14 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                           const vector<Blob<Dtype>*>& top);
 
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+                       const vector<Blob<Dtype>*>& top);
+
+  /**
+   * @brief Updates a layer before a new batch. Needed for updating weights in the FFT-Layer
+   */
+  virtual void LayerUpdateBeforeBatch();
+
   enum PASS_TYPE { FORWARD, BACKWARD, WEIGHT };
 
  protected:
@@ -461,7 +469,6 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
 
   int num_threads_;
   int num_weights_;
-  std::vector<int> bottom_shape_;
   std::vector<int> top_shape_;
 
 
