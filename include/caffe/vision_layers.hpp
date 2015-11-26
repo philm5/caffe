@@ -453,6 +453,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   int fft_real_size_;
 
   bool fft_update_weights_each_batch_;
+  bool fft_inplace_;
 
   // Allocation sizes:
   size_t padded_weights_real_size_;

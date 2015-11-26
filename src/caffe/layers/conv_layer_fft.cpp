@@ -41,6 +41,12 @@ void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   } else {
     this->fft_update_weights_each_batch_ = false;
   }
+
+  if (conv_param.has_fft_inplace()) {
+    this->fft_inplace_ = conv_param.fft_inplace();
+  } else {
+    this->fft_inplace_ = false;
+  }
 }
 
 template <typename Dtype>

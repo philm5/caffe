@@ -11,9 +11,8 @@
 
 namespace caffe {
 template <typename Dtype>
-__global__ void pad_real_blob_gpu_kernel(const int K, const int H, const int W, const int fft_height, const int fft_width,
-                                         const int fft_real_size, const Dtype *blob_data, Dtype *padded_data,
-                                         const int pad_h, const int pad_w, const int stride_h, const int stride_w) {
+__global__ void pad_real_blob_gpu_kernel(const int K, const int H, const int W, const int fft_height, const int fft_width, const Dtype *blob_data, Dtype *padded_data,
+                                         const int pad_h, const int pad_w, const int stride_h, const int stride_w, bool inplace) {
 
   // blockDim (256, 1) ----- (num_output_, (ch_gr) / CUDA_NUM_THREADS)
   //                              x                y
@@ -24,10 +23,12 @@ __global__ void pad_real_blob_gpu_kernel(const int K, const int H, const int W, 
 
 
   if (hw < H*W) {
+    // if inplace take fft_complex_size * 2 because complex has double the size [sizeof(std::complex)]
+    int fft_size = inplace ? fft_height * (fft_width / 2 + 1) * 2 : fft_height * fft_width;
 
     for (int k = 0; k < K; ++k) {
       // get offset with channels and the idx of the output.
-      const int offset_weight_real = (n * K + k) * fft_real_size;
+      const int offset_weight_real = (n * K + k) * fft_size;
       const int offset_blob_real = (n * K + k) * H * W;
       const int h = hw / W;
       const int w = hw % W;
@@ -48,12 +49,12 @@ __global__ void pad_real_blob_gpu_kernel(const int K, const int H, const int W, 
 }
 
 template __global__ void pad_real_blob_gpu_kernel<float>(const int K, const int H, const int W, const int fft_height, const int fft_width,
-                                                         const int fft_real_size, const float *blob_data, float *padded_data,
-                                                         const int pad_h, const int pad_w, const int stride_h, const int stride_w);
+                                                         const float *blob_data, float *padded_data,
+                                                         const int pad_h, const int pad_w, const int stride_h, const int stride_w, bool inplace);
 
 template __global__ void pad_real_blob_gpu_kernel<double>(const int K, const int H, const int W, const int fft_height, const int fft_width,
-                                                          const int fft_real_size, const double *blob_data, double *padded_data,
-                                                          const int pad_h, const int pad_w, const int stride_h, const int stride_w);
+                                                          const double *blob_data, double *padded_data,
+                                                          const int pad_h, const int pad_w, const int stride_h, const int stride_w, bool inplace);
 
 __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K, const int H, const int W,
                                                         const int weight_group_size, const cufftComplex *ffted_bottom_data,
@@ -517,7 +518,7 @@ template __global__ void fft_pointwise_multiply_gemm_construct_array_gpu_kernel<
 template <typename Dtype>
 void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int fft_width,
                        const Dtype *blob_data, Dtype *padded_data, const int pad_h,
-                       const int pad_w, const int stride_h, const int stride_w) {
+                       const int pad_w, const int stride_h, const int stride_w, bool inplace) {
 
   const int N = shape[0]; // 10
   const int K = shape[1];
@@ -526,11 +527,15 @@ void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int f
 
   const int fft_real_size = fft_height * fft_width;
 
-  int num_arr = N * K; // # of arrays (for weights it is num_weights [96 x 3]
+  int size = N * K; // # of arrays (for weights it is num_weights [96 x 3]
   // for input data it is channels [ 1 x 3]
 
+  // if inplace take fft_complex_size * 2 because complex has double the size [sizeof(std::complex)]
+  size = inplace ? size * fft_height * (fft_width / 2 + 1) * 2 : size * fft_height * fft_width;
+
+
   // set everything to 0 before --> so not set weights are 0-padded :)
-  caffe_gpu_memset(fft_real_size * num_arr * sizeof(Dtype), 0., padded_data);
+  caffe_gpu_memset(size * sizeof(Dtype), 0., padded_data);
 
   // N = 256 (num_output_)
   // K = 96 / 2 (channels / group) ==> (48 / 512 ) + 1 = 1
@@ -538,18 +543,18 @@ void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int f
   int thread_num = CAFFE_CUDA_NUM_THREADS;
 
   pad_real_blob_gpu_kernel<Dtype><<<block_num, thread_num>>>(
-      K, H, W, fft_height, fft_width, fft_real_size,
-      blob_data, padded_data, pad_h, pad_w, stride_h, stride_w);
+      K, H, W, fft_height, fft_width, blob_data, padded_data,
+      pad_h, pad_w, stride_h, stride_w, inplace);
   CUDA_POST_KERNEL_CHECK;
 }
 
 template void pad_real_blob_gpu<float>(std::vector<int> shape, const int fft_height, const int fft_width,
                                        const float *blob_data, float *padded_data, const int pad_h,
-                                       const int pad_w, const int stride_h, const int stride_w);
+                                       const int pad_w, const int stride_h, const int stride_w, bool inplace);
 
 template void pad_real_blob_gpu<double>(std::vector<int> shape, const int fft_height, const int fft_width,
                                         const double *blob_data, double *padded_data, const int pad_h,
-                                        const int pad_w, const int stride_h, const int stride_w);
+                                        const int pad_w, const int stride_h, const int stride_w, bool inplace);
 
 template <>
 void fft_util_pointwise_multiply_gpu<float>(std::vector<int> shape, int group, const std::complex<float> *bottom_complex,

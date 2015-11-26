@@ -398,7 +398,7 @@ ifeq ($(FFT), 1)
         
         # cuda stuff
         ifneq ($(CPU_ONLY), 1)
-			LIBRARIES += cufft npps
+			LIBRARIES += cufft npps nppc
 		endif
         
         COMMON_FLAGS += -DUSE_FFT

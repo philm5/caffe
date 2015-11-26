@@ -114,7 +114,7 @@ __device__ void fft_gpu_zmultiply_add(const cufftDoubleComplex first, const cuff
 template<typename Dtype>
 void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int fft_width,
                        const Dtype *blob_data, Dtype *padded_data, const int pad_h,
-                       const int pad_w, const int stride_h, const int stride_w);
+                       const int pad_w, const int stride_h, const int stride_w, bool inplace = false);
 
 template<typename Dtype>
 void fft_util_pointwise_multiply_gpu(std::vector<int> shape, int group, const std::complex<Dtype> *bottom_complex,

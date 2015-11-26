@@ -187,7 +187,6 @@ template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_update_weights_gpu() {
   Dtype *padded_real_weights_gpu;
 
-  CUDA_CHECK(cudaMalloc(&padded_real_weights_gpu, this->padded_weights_real_size_));
   const Dtype *weight_data = this->blobs_[0]->gpu_data();
   vector<int> shape;
   shape.push_back(this->num_output_);
@@ -195,24 +194,30 @@ void ConvolutionLayerFFT<Dtype>::fft_update_weights_gpu() {
   shape.push_back(this->kernel_shape_.cpu_data()[0]);
   shape.push_back(this->kernel_shape_.cpu_data()[1]);
 
-  // weights do not have to be padded (only 0-padded). But the weights have to be flipped, since the convolution is actually a
-  // cross-correlation.
-  pad_real_blob_gpu<Dtype>(shape, this->fft_height_, this->fft_width_, weight_data, padded_real_weights_gpu,
-                           0, 0, 1, 1);
+  if (this->fft_inplace_) {
+    Dtype *ffted_weights = reinterpret_cast<Dtype *>(this->ffted_weights_);
+    pad_real_blob_gpu<Dtype>(shape, this->fft_height_, this->fft_width_, weight_data, ffted_weights,
+                             0, 0, 1, 1, true);
+    fft_gpu_execute_plan_r2c<Dtype>(fft_weight_plan_, ffted_weights, this->ffted_weights_);
+  } else {
+    CUDA_CHECK(cudaMalloc(&padded_real_weights_gpu, this->padded_weights_real_size_));
+    pad_real_blob_gpu<Dtype>(shape, this->fft_height_, this->fft_width_, weight_data, padded_real_weights_gpu,
+                             0, 0, 1, 1);
+    fft_gpu_execute_plan_r2c<Dtype>(fft_weight_plan_, padded_real_weights_gpu, this->ffted_weights_);
 
-  fft_gpu_execute_plan_r2c<Dtype>(fft_weight_plan_, padded_real_weights_gpu, this->ffted_weights_);
+    // free the padded real data... (no more need for it)
+    CUDA_CHECK(cudaFree(padded_real_weights_gpu));
+  }
 
-  // free the padded real data... (no more need for it)
-  CUDA_CHECK(cudaFree(padded_real_weights_gpu));
+
 
   // transpose weights if cgemm pt-wise product should be done
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
-  std::complex<Dtype> *transposed_weights;
-  CUDA_CHECK(cudaMalloc(&transposed_weights, this->padded_weights_complex_size_));
 
   const int weight_shape[] = { this->num_output_, this->channels_
       / this->group_, this->fft_height_, (this->fft_width_ / 2) + 1 };
-
+  std::complex<Dtype> *transposed_weights;
+  CUDA_CHECK(cudaMalloc(&transposed_weights, this->padded_weights_complex_size_));
   fft_util_geam_transpose_gpu<Dtype>(this->ffted_weights_, transposed_weights, weight_shape, 2);
   CUDA_CHECK(cudaFree(this->ffted_weights_));
   this->ffted_weights_ = transposed_weights;
@@ -241,48 +246,20 @@ void ConvolutionLayerFFT<Dtype>::fft_free_weights_gpu() {
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_bottom_gpu(const Dtype *bottom) {
-#ifdef DBG_OUTPUT
-  float time;
-  cudaEvent_t start, pad_bottom, stop;
-  cudaEventCreate(&start);
-  cudaEventCreate(&pad_bottom);
-  cudaEventCreate(&stop);
-  cudaEventRecord(start, 0);
-#endif
   const Dtype *bottom_blob = bottom;
-
   pad_real_blob_gpu(*this->bottom_shape_, this->fft_height_, this->fft_width_, bottom_blob, this->padded_real_bottom_gpu_, this->pad_.cpu_data()[0], this->pad_.cpu_data()[1], 1, 1);
-
-#ifdef DBG_OUTPUT
-  cudaEventRecord(pad_bottom, 0);
-  cudaEventSynchronize(pad_bottom);
-#endif
 
   // Execute fft bottom plan
   fft_gpu_execute_plan_r2c<Dtype>(this->fft_bottom_plan_gpu_, this->padded_real_bottom_gpu_, this->ffted_bottom_data_gpu_);
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  const int shape_bottom[] = {this->num_, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
   // transpose input if cgemm pt-wise product should be done
   std::complex<Dtype> *fft_transposed_bottom;
   CUDA_CHECK(cudaMalloc(&fft_transposed_bottom, this->padded_bottom_complex_size_));
-  const int shape_bottom[] = {this->num_, this->channels_, this->fft_height_, (this->fft_width_ / 2) + 1};
-  // const int permutation_bottom[] = {2, 3, 0, 1};
   fft_util_geam_transpose_gpu(this->ffted_bottom_data_gpu_, fft_transposed_bottom, shape_bottom, 2);
   CUDA_CHECK(cudaFree(this->ffted_bottom_data_gpu_));
   this->ffted_bottom_data_gpu_ = fft_transposed_bottom;
-#endif
-
-#ifdef DBG_OUTPUT
-  cudaEventRecord(stop, 0);
-  cudaEventSynchronize(stop);
-  cudaEventElapsedTime(&time, start, pad_bottom);
-  LOG(INFO) << this->layer_param_.name() << "| fft_bottom_gpu | padding of bottom: " << time << "ms..";
-  cudaEventElapsedTime(&time, pad_bottom, stop);
-  LOG(INFO) << this->layer_param_.name() << "| fft_bottom_gpu | fft of bottom (with permute4d if cgemm): " << time << "ms.";
-
-  cudaEventDestroy(start);
-  cudaEventDestroy(pad_bottom);
-  cudaEventDestroy(stop);
 #endif
 }
 
@@ -298,11 +275,10 @@ void ConvolutionLayerFFT<Dtype>::fft_top_gpu(const Dtype *top) {
   fft_gpu_execute_plan_r2c<Dtype>(this->fft_top_plan_gpu_, this->fft_convolution_result_real_gpu_, this->ptwise_result_gpu_);
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
+  const int shape_top[] = {this->num_, this->num_output_, this->fft_height_, (this->fft_width_ / 2) + 1};
   // transpose input if cgemm pt-wise product should be done
   std::complex<Dtype> *fft_transposed_top;
   CUDA_CHECK(cudaMalloc(&fft_transposed_top, this->padded_top_complex_size_));
-  const int shape_top[] = {this->num_, this->num_output_, this->fft_height_, (this->fft_width_ / 2) + 1};
-  // const int permutation_bottom[] = {2, 3, 0, 1};
   fft_util_geam_transpose_gpu(this->ptwise_result_gpu_, fft_transposed_top, shape_top, 2);
   CUDA_CHECK(cudaFree(this->ptwise_result_gpu_));
   this->ptwise_result_gpu_ = fft_transposed_top;
