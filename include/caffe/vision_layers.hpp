@@ -301,7 +301,7 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   virtual void fft_free_weights_cpu();
 
   virtual void pad_real_blob(std::vector<int> shape, const Dtype *blob_data, Dtype *padded_data,
-                             int pad_h = 0, int pad_w = 0, bool flip = false, int stride_h = 1, int stride_w = 1);
+                             int pad_h = 0, int pad_w = 0, int stride_h = 1, int stride_w = 1, bool inplace = false);
 
   virtual void fft_set_up_cpu();
 
@@ -369,10 +369,6 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
                                  std::complex<Dtype> *ffted_result,
                                  Dtype *iffted_result, Dtype *result,
                                  bool add_to_result);
-
-  virtual void fft_normalize_backward_cpu(Dtype *bottom);
-
-  virtual void fft_normalize_weight_cpu(Dtype *weight);
 
   /**
    * Helper stuff

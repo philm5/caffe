@@ -22,11 +22,11 @@ namespace caffe {
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
                                          const vector<Blob<Dtype>*>& top) {
-   ConvolutionLayer<Dtype>::Reshape(bottom, top);
-   CHECK_EQ(2, this->num_spatial_axes_)
-         << "FFT Convolution input must have 2 spatial axes "
-         << "(e.g., height and width). "
-         << "Use 'engine: CAFFE' for general ND convolution.";
+  ConvolutionLayer<Dtype>::Reshape(bottom, top);
+  CHECK_EQ(2, this->num_spatial_axes_)
+  << "FFT Convolution input must have 2 spatial axes "
+  << "(e.g., height and width). "
+  << "Use 'engine: CAFFE' for general ND convolution.";
 }
 
 template <typename Dtype>
@@ -302,7 +302,7 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
         break;
     }
 
-      this->fft_initialized_ = true;
+    this->fft_initialized_ = true;
   }
 }
 
@@ -324,28 +324,35 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_cpu() {
   fft_cpu_plan_with_nthreads<Dtype>(this->num_threads_);
 #endif
 
+  // The plan for fft of the weights
+  this->ffted_weights_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_weights_complex_size_));
 
   // init the weights...
   this->fft_update_weights_cpu();
 
   // Allocate the real and complex memory for the bottom data
-  this->padded_real_bottom_ =
-      reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_bottom_real_size_));
 
   this->ffted_bottom_data_ =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_bottom_complex_size_));
 
-  this->fft_convolution_result_real_ =
-      reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->convolution_result_real_size_));
-
   this->ptwise_result_ =
       reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
+
+  // dont allocate real buffers in inplace mode!
+  if (!this->fft_inplace_) {
+    this->padded_real_bottom_ =
+        reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_bottom_real_size_));
+
+    this->fft_convolution_result_real_ =
+        reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->convolution_result_real_size_));
+  } else {
+    this->padded_real_bottom_ = NULL;
+    this->fft_convolution_result_real_ = NULL;
+  }
 }
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_update_weights_cpu() {
-  Dtype *padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_weights_real_size_));
-
   // get the pointer to the weights
   const Dtype *weight_data = this->blobs_[0]->cpu_data();
   vector<int> shape;
@@ -354,27 +361,44 @@ void ConvolutionLayerFFT<Dtype>::fft_update_weights_cpu() {
   shape.push_back(this->kernel_shape_.cpu_data()[0]);
   shape.push_back(this->kernel_shape_.cpu_data()[1]);
 
-  // weights do not have to be padded (only 0-padded). But the weights have to be flipped, since the convolution is actually a
-  // cross-correlation.
-  this->pad_real_blob(shape, weight_data, padded_real_weights, 0, 0, false);
+  if (!this->fft_inplace_) {
+    Dtype *padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_weights_real_size_));
+    // weights do not have to be padded (only 0-padded). But the weights have to be flipped, since the convolution is actually a
+    // cross-correlation.
+    this->pad_real_blob(shape, weight_data, padded_real_weights, 0, 0);
 
-  // The plan for fft of the weights
-  this->ffted_weights_ = reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_weights_complex_size_));
+    const void *fft_weight_plan = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
+                                                                      this->fft_width_,
+                                                                      this->num_weights_,
+                                                                      padded_real_weights,
+                                                                      this->ffted_weights_,
+                                                                      FFTW_ESTIMATE);
 
-  const void *fft_weight_plan = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
-                                                                    this->fft_width_,
-                                                                    this->num_weights_,
-                                                                    padded_real_weights,
-                                                                    this->ffted_weights_,
-                                                                    FFTW_ESTIMATE);
+    // Do the FFT of the padded weights:
+    fft_cpu_execute_plan<Dtype>(fft_weight_plan);
 
-  // Do the FFT of the padded weights:
-  fft_cpu_execute_plan<Dtype>(fft_weight_plan);
+    // Destroy the weight plan:
+    fft_cpu_destroy_plan<Dtype>(fft_weight_plan);
+    // free the padded real weights. There is no need for them anymore. TODO: Also free weights in blobs_[0] ???
+    fft_cpu_free<Dtype>(padded_real_weights);
+  } else {
+    Dtype *ffted_weights = reinterpret_cast<Dtype *>(this->ffted_weights_);
+    this->pad_real_blob(shape, weight_data, ffted_weights, 0, 0, 1, 1, true);
 
-  // Destroy the weight plan:
-  fft_cpu_destroy_plan<Dtype>(fft_weight_plan);
-  // free the padded real weights. There is no need for them anymore. TODO: Also free weights in blobs_[0] ???
-  fft_cpu_free<Dtype>(padded_real_weights);
+    const void *fft_weight_plan = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
+                                                                      this->fft_width_,
+                                                                      this->num_weights_,
+                                                                      ffted_weights,
+                                                                      this->ffted_weights_,
+                                                                      FFTW_ESTIMATE);
+
+    // Do the FFT of the padded weights:
+    fft_cpu_execute_plan<Dtype>(fft_weight_plan);
+
+    // Destroy the weight plan:
+    fft_cpu_destroy_plan<Dtype>(fft_weight_plan);
+  }
+
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   // transpose weights if cgemm pt-wise product should be done
@@ -501,20 +525,30 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_bottom_cpu(const Dtype *bottom) {
   const Dtype *bottom_blob = bottom;
 
-  // now pad the bottom data (it should have its origin in (h,w)), but don't flip it.1
-  this->pad_real_blob(*this->bottom_shape_, bottom_blob, this->padded_real_bottom_, this->pad_.cpu_data()[0], this->pad_.cpu_data()[1], false);
+  if (!this->fft_inplace_) {
+    // now pad the bottom data (it should have its origin in (h,w)), but don't flip it.1
+    this->pad_real_blob(*this->bottom_shape_, bottom_blob, this->padded_real_bottom_, this->pad_.cpu_data()[0], this->pad_.cpu_data()[1]);
 
+    this->fft_bottom_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
+                                                                 this->fft_width_,
+                                                                 this->channels_ * this->num_,
+                                                                 this->padded_real_bottom_,
+                                                                 this->ffted_bottom_data_,
+                                                                 FFTW_ESTIMATE);
+  } else {
+    Dtype *ffted_bottom_data = reinterpret_cast<Dtype *>(this->ffted_bottom_data_);
+    // now pad the bottom data (it should have its origin in (h,w)), but don't flip it.1
+    this->pad_real_blob(*this->bottom_shape_, bottom_blob, ffted_bottom_data, this->pad_.cpu_data()[0],
+                        this->pad_.cpu_data()[1], 1, 1, true);
 
-
-  this->fft_bottom_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
-                                                               this->fft_width_,
-                                                               this->channels_ * this->num_,
-                                                               this->padded_real_bottom_,
-                                                               this->ffted_bottom_data_,
-                                                               FFTW_ESTIMATE);
-
+    this->fft_bottom_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
+                                                                 this->fft_width_,
+                                                                 this->channels_ * this->num_,
+                                                                 ffted_bottom_data,
+                                                                 this->ffted_bottom_data_,
+                                                                 FFTW_ESTIMATE);
+  }
   fft_cpu_execute_plan<Dtype>(this->fft_bottom_plan_);
-
   fft_cpu_free<Dtype>(this->fft_bottom_plan_);
   this->fft_bottom_plan_ = NULL;
 
@@ -536,17 +570,34 @@ template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_top_cpu(const Dtype *top) {
   const Dtype *top_blob = top;
 
-  // now pad the top data (it should have its origin in (h,w)), but don't flip it.1
-  this->pad_real_blob(this->top_shape_, top_blob, this->fft_convolution_result_real_, 0, 0, false, this->stride_.cpu_data()[0], this->stride_.cpu_data()[1]);
+  if (!this->fft_inplace_) {
+    // now pad the top data (it should have its origin in (h,w)), but don't flip it.1
+    this->pad_real_blob(this->top_shape_, top_blob, this->fft_convolution_result_real_, 0, 0,
+                        this->stride_.cpu_data()[0], this->stride_.cpu_data()[1]);
 
-  this->fft_top_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
-                                                            this->fft_width_,
-                                                            this->num_output_ * this->num_,
-                                                            this->fft_convolution_result_real_,
-                                                            this->ptwise_result_,
-                                                            FFTW_ESTIMATE);
+    this->fft_top_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
+                                                              this->fft_width_,
+                                                              this->num_output_ * this->num_,
+                                                              this->fft_convolution_result_real_,
+                                                              this->ptwise_result_,
+                                                              FFTW_ESTIMATE);
+  } else {
+    Dtype *ptwise_result = reinterpret_cast<Dtype *>(this->ptwise_result_);
+    // now pad the top data (it should have its origin in (h,w)), but don't flip it.1
+    this->pad_real_blob(this->top_shape_, top_blob, ptwise_result, 0, 0,
+                        this->stride_.cpu_data()[0], this->stride_.cpu_data()[1], true);
+
+    this->fft_top_plan_ = fft_cpu_plan_many_dft_r2c_2d<Dtype>(this->fft_height_,
+                                                              this->fft_width_,
+                                                              this->num_output_ * this->num_,
+                                                              ptwise_result,
+                                                              this->ptwise_result_,
+                                                              FFTW_ESTIMATE);
+  }
 
   fft_cpu_execute_plan<Dtype>(this->fft_top_plan_);
+  fft_cpu_free<Dtype>(this->fft_top_plan_);
+  this->fft_top_plan_ = NULL;
 
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   // transpose input if cgemm pt-wise product should be done
@@ -640,12 +691,17 @@ void ConvolutionLayerFFT<Dtype>::fft_convolve_weight_cpu(Dtype *weight) {
   shape.push_back(this->kernel_shape_.cpu_data()[0]);
   shape.push_back(this->kernel_shape_.cpu_data()[1]);
 
-  Dtype *padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_weights_real_size_));
+  Dtype *padded_real_weights = NULL;
+  if (!this->fft_inplace_) {
+    padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_weights_real_size_));
+  }
 
   this->fft_normalize_cpu(shape, 1, 1, 0, 0, this->ffted_weights_ ,
                           padded_real_weights, weight, true);
 
-  fft_cpu_free<Dtype>(padded_real_weights);
+  if (!this->fft_inplace_) {
+    fft_cpu_free<Dtype>(padded_real_weights);
+  }
 }
 
 template <typename Dtype>
@@ -786,9 +842,9 @@ void ConvolutionLayerFFT<Dtype>::fft_pointwise_multiply_weight_cpu() {
 
   std::complex<Dtype> *res_ptr = this->ffted_weights_;
 
-  #ifdef _OPENMP
-  #pragma omp parallel for private(n, hw, k, batch_idx) collapse(3)
-  #endif
+#ifdef _OPENMP
+#pragma omp parallel for private(n, hw, k, batch_idx) collapse(3)
+#endif
   for (n = 0; n < N; ++n) {
     for (hw = 0; hw < H * W; ++hw) {
       for (k = 0; k < K; ++k) {
@@ -1087,6 +1143,9 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::vector<int> shape, const
   const int W = shape[3];
 
   int fft_batch_size = N * K;
+  if (this->fft_inplace_) {
+    iffted_result = reinterpret_cast<Dtype *>(ffted_result);
+  }
 
   this->ifft_plan_ = fft_cpu_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
                                                          this->fft_width_,
@@ -1099,15 +1158,19 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::vector<int> shape, const
   fft_cpu_free<Dtype>(this->ifft_plan_);
   this->ifft_plan_ = NULL;
 
+  // if inplace take fft_complex_size * 2 because complex has double the size [sizeof(std::complex)]
+  int fft_width = this->fft_inplace_ ? (this->fft_width_ / 2 + 1) * 2 : this->fft_width_;
+  int fft_size = this->fft_height_ * fft_width;
+
   // here the stride handling and FFT normalization is happening:
   Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
 
-  #ifdef _OPENMP
-  #pragma omp parallel for collapse(2)
-  #endif
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2)
+#endif
   for (int n = 0; n < N; ++n) {
     for (int k = 0; k < K; ++k) {
-      const int fft_res_real_offset = (n * K + k) * this->fft_real_size_;
+      const int fft_res_real_offset = (n * K + k) * fft_size;
 
       for (int h = 0; h < H; ++h) // =55 in 1st layer
       {
@@ -1122,7 +1185,7 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::vector<int> shape, const
           const int result_idx = ((n * K + k) * H + h) * W + w;
 
           // the index in the data of the convolution result array (the real one)
-          const int fft_result_real_idx = fft_res_real_offset + h_idx * this->fft_width_ + w_idx;
+          const int fft_result_real_idx = fft_res_real_offset + h_idx * fft_width + w_idx;
 
           // normalize fft and sum up everything from the input channels...
           Dtype tmp_result = iffted_result[fft_result_real_idx] * ifft_normalize_factor;
@@ -1138,102 +1201,23 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_cpu(std::vector<int> shape, const
 }
 
 template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_normalize_backward_cpu(Dtype *bottom) {
-  // do ifft of reuslt.
-  this->ifft_plan_ = fft_cpu_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
-                                                         this->fft_width_,
-                                                         this->channels_ * this->num_,
-                                                         this->ffted_bottom_data_,
-                                                         this->padded_real_bottom_,
-                                                         FFTW_ESTIMATE);
-
-  fft_cpu_execute_plan<Dtype>(this->ifft_plan_);
-
-  fft_cpu_free<Dtype>(this->ifft_plan_);
-  this->ifft_plan_ = NULL;
-
-  // now depad into bottom_blob
-  Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
-
-  const int N = this->num_;
-  const int K = this->channels_;
-  const int H = this->input_shape(1);
-  const int W = this->input_shape(2);
-  //#ifdef _OPENMP
-  //#pragma omp parallel for
-  //#endif
-  for (int n = 0; n < N; n++) {
-    for (int k = 0; k < K; k++) {
-      for (int h = 0; h < H; h++) {
-        for (int w = 0; w < W; w++) {
-          const int offset_weight_real = (n * K + k) * this->fft_real_size_;
-          const int idx_weight_real = offset_weight_real + (h + this->pad_.cpu_data()[0] ) * this->fft_width_ + (w + this->pad_.cpu_data()[1]);
-          const int idx_weight_in_blob = ((n * K + k) * H + h) * W + w;
-
-          bottom[idx_weight_in_blob] = this->padded_real_bottom_[idx_weight_real] * ifft_normalize_factor;
-        }
-      }
-    }
-  }
-}
-
-template <typename Dtype>
-void ConvolutionLayerFFT<Dtype>::fft_normalize_weight_cpu(Dtype *weight) {
-
-
-  Dtype *padded_real_weights = reinterpret_cast<Dtype *>(fft_cpu_malloc<Dtype>(this->padded_weights_real_size_));
-
-  // ifft the weight diff...
-  this->ifft_plan_ = fft_cpu_plan_many_dft_c2r_2d<Dtype>(this->fft_height_,
-                                                         this->fft_width_,
-                                                         this->num_weights_,
-                                                         this->ffted_weights_,
-                                                         padded_real_weights,
-                                                         FFTW_ESTIMATE);
-
-  fft_cpu_execute_plan<Dtype>(this->ifft_plan_);
-
-  // here the stride handling and FFT normalization is happening:
-  Dtype ifft_normalize_factor = 1. / (this->fft_width_ * this->fft_height_);
-  int N = this->num_output_;
-  int K = this->channels_ / this->group_;
-
-  for (int n = 0; n < N; ++n) {
-    for (int k = 0; k < K; ++k) {
-      const int offset_res_real = (n * K + k) * this->fft_real_size_;
-
-      for (int h = 0; h < this->kernel_shape_.cpu_data()[0]; ++h)
-      {
-        int h_idx = h; //this->pad_.cpu_data()[0] + h * this->output_shape_[0];
-        for (int w = 0; w < this->kernel_shape_.cpu_data()[1]; ++w)
-        {
-          int w_idx = w; //this->pad_.cpu_data()[1] + w * this->output_shape_[1]; //* this->stride_.cpu_data()[1];
-          const int top_data_idx = ((n * K + k) * this->kernel_shape_.cpu_data()[0] + h) * this->kernel_shape_.cpu_data()[1] + w;
-          int res_data_idx = offset_res_real + h_idx * this->fft_width_ + w_idx;
-
-          // normalize fft and sum up everything from the input channels...
-          weight[top_data_idx] += padded_real_weights[res_data_idx] * ifft_normalize_factor; // 1 op
-        }
-      }
-    }
-  }
-
-  fft_cpu_free<Dtype>(padded_real_weights);
-}
-
-template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dtype *blob_data, Dtype *padded_data,
-                                               int pad_h, int pad_w, bool flip, int stride_h, int stride_w) {
+                                               int pad_h, int pad_w, int stride_h, int stride_w, bool inplace) {
   const int N = shape[0];
   const int K = shape[1];
   const int H = shape[2];
   const int W = shape[3];
 
-  int num_arr = N * K; // # of arrays (for weights it is num_weights [96 x 3]
+  int size = N * K; // # of arrays (for weights it is num_weights [96 x 3]
   // for input data it is channels [ 1 x 3]
 
+  // if inplace take fft_complex_size * 2 because complex has double the size [sizeof(std::complex)]
+  int fft_width = inplace ? (this->fft_width_ / 2 + 1) * 2 : this->fft_width_;
+  int fft_size = this->fft_height_ * fft_width;
+  size = size * fft_size;
+
   // set everything to 0 before --> so not set weights are 0-padded :)
-  caffe_memset(this->fft_real_size_ * num_arr * sizeof(Dtype), 0., padded_data);
+  caffe_memset(size * sizeof(Dtype), 0., padded_data);
   //#ifdef _OPENMP
   //#pragma omp parallel for
   //#endif
@@ -1242,7 +1226,7 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
       for (int h = 0; h < H; h++) {
         for (int w = 0; w < W; w++) {
           // ((n * ch_gr + c) * fft_height_ + h)* 2 * (fft_width_ / 2 + 1) + w
-          const int offset_weight_real = (n * K + k) * this->fft_real_size_;
+          const int offset_weight_real = (n * K + k) * fft_size;
           // e.g. a 3x3 filter should fit into a 5x5 because the image size is 5x5 (here the stride is 1)
           // <--W-->
           // ^ f f f 0 0
@@ -1251,18 +1235,14 @@ void ConvolutionLayerFFT<Dtype>::pad_real_blob(std::vector<int> shape, const Dty
           //   0 0 0 0 0
           //   0 0 0 0 0
 
-          const int idx_weight_real = offset_weight_real + (h * stride_h + pad_h) * this->fft_width_ + (w  * stride_w + pad_w);
+          const int idx_weight_real = offset_weight_real + (h * stride_h + pad_h) * fft_width + (w  * stride_w + pad_w);
           // copy each weight into the fft_weights_in_real_
           // get ptr to blob data. indexing see: http://caffe.berkeleyvision.org/tutorial/net_layer_blob.html
           // Blob memory is row-major in layout, so the last / rightmost dimension changes fastest. For example,
           // in a 4D blob, the value at index (n, k, h, w) is physically located at index ((n * K + k) * H + h) * W + w.
           // 96 x 3 x 11 x 11 (num_output_, channels_ / group_, kernel_height, width_)
 
-          // if flip = true ==> flip the indices of the weights. Caffe actually does not a convolution but a
-          // a cross-correlation according to: https://github.com/BVLC/caffe/issues/2513
-          const int h_idx = flip ? H - (h + 1) : h;
-          const int w_idx = flip ? W - (w + 1) : w;
-          const int idx_weight_in_blob = ((n * K + k) * H + h_idx) * W + w_idx;
+          const int idx_weight_in_blob = ((n * K + k) * H + h) * W + w;
 
           padded_data[idx_weight_real] = blob_data[idx_weight_in_blob];
         }

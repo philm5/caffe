@@ -91,17 +91,27 @@ void *fft_cpu_plan_many_dft_r2c_2d<float>(int n0,
                                       unsigned flags) {
   int rank = 2;
   int n[] = {n0, n1};
+  int n_inplace[] = {n0, 2 * (n1 / 2 + 1)};
+
+
   int idist = n0 * n1; /* = 256*256, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
+
+  int *inembed = n;
+  if (reinterpret_cast<void *>(in) == reinterpret_cast<void *>(out)) {
+    // in-place transform...
+    idist = n0 * (n1 / 2 + 1) * 2;
+    inembed = n_inplace;
+  }
   int istride = 1; /* array is contiguous in memory */
-  int *inembed = NULL;
 
   // out
   int odist = n0 * (n1 / 2 + 1);
   int ostride = 1;
-  int *onembed = NULL;
+  int n_o[] = {n0, n1 / 2 + 1};
+  int *onembed = n_o;
 
   return reinterpret_cast<void *>(fftwf_plan_many_dft_r2c(rank, n, how_many, in, inembed, istride, idist,
                                                           reinterpret_cast<fftwf_complex *>(out), onembed, ostride,
@@ -117,17 +127,27 @@ void *fft_cpu_plan_many_dft_r2c_2d<double>(int n0,
                                        unsigned flags) {
   int rank = 2;
   int n[] = {n0, n1};
+  int n_inplace[] = {n0, 2 * (n1 / 2 + 1)};
+
+
   int idist = n0 * n1; /* = 256*256, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
+
+  int *inembed = n;
+  if (reinterpret_cast<void *>(in) == reinterpret_cast<void *>(out)) {
+    // in-place transform...
+    idist = n0 * (n1 / 2 + 1) * 2;
+    inembed = n_inplace;
+  }
   int istride = 1; /* array is contiguous in memory */
-  int *inembed = NULL;
 
   // out
   int odist = n0 * (n1 / 2 + 1);
   int ostride = 1;
-  int *onembed = NULL;
+  int n_o[] = {n0, n1 / 2 + 1};
+  int *onembed = n_o;
 
   return reinterpret_cast<void *>(fftw_plan_many_dft_r2c(rank, n, how_many, in, inembed, istride, idist,
                                                          reinterpret_cast<fftw_complex *>(out), onembed, ostride,
@@ -143,17 +163,24 @@ void *fft_cpu_plan_many_dft_c2r_2d<float>(int n0,
                                       unsigned flags) {
   int rank = 2;
   int n[] = {n0, n1};
+  int n_inplace[] = {n0, 2 * (n1 / 2 + 1)};
   int idist = n0 * (n1 / 2 + 1); /* = 256*129, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
   int istride = 1; /* array is contiguous in memory */
-  int *inembed = NULL;
+  int n_i[] = {n0, n1 / 2 + 1};
+  int *inembed = n_i;
 
   // out
   int odist = n0 * n1;
+  int *onembed = n;
+  if (reinterpret_cast<void *>(in) == reinterpret_cast<void *>(out)) {
+    // in-place transform...
+    odist = n0 * (n1 / 2 + 1) * 2;
+    onembed = n_inplace;
+  }
   int ostride = 1;
-  int *onembed = NULL;
 
   return reinterpret_cast<void *>(fftwf_plan_many_dft_c2r(rank,
                                                           n,
@@ -176,21 +203,26 @@ void *fft_cpu_plan_many_dft_c2r_2d<double>(int n0,
                                        std::complex<double> *in,
                                        double *out,
                                        unsigned flags) {
-
   int rank = 2;
   int n[] = {n0, n1};
+  int n_inplace[] = {n0, 2 * (n1 / 2 + 1)};
   int idist = n0 * (n1 / 2 + 1); /* = 256*129, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
   int istride = 1; /* array is contiguous in memory */
-  int *inembed = NULL;
+  int n_i[] = {n0, n1 / 2 + 1};
+  int *inembed = n_i;
 
   // out
   int odist = n0 * n1;
+  int *onembed = n;
+  if (reinterpret_cast<void *>(in) == reinterpret_cast<void *>(out)) {
+    // in-place transform...
+    odist = n0 * (n1 / 2 + 1) * 2;
+    onembed = n_inplace;
+  }
   int ostride = 1;
-  int *onembed = NULL;
-
 
   return reinterpret_cast<void *>(fftw_plan_many_dft_c2r(rank,
                                                          n,
