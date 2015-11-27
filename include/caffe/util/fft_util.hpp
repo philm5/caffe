@@ -91,10 +91,10 @@ void npp_complex_add_product(const std::complex<Dtype> *src1, const std::complex
                              std::complex<Dtype> *dst, int len);
 
 template<typename Dtype>
-void fft_gpu_plan_many_dft_r2c_2d(cufftHandle *plan, int n0, int n1, int how_many);
+void fft_gpu_plan_many_dft_r2c_2d(cufftHandle *plan, int n0, int n1, int how_many, bool inplace = false);
 
 template<typename Dtype>
-void fft_gpu_plan_many_dft_c2r_2d(cufftHandle *plan, int n0, int n1, int how_many);
+void fft_gpu_plan_many_dft_c2r_2d(cufftHandle *plan, int n0, int n1, int how_many, bool inplace = false);
 
 template<typename Dtype>
 void fft_gpu_execute_plan_r2c(cufftHandle plan, Dtype *in, std::complex<Dtype> *out);
@@ -143,8 +143,8 @@ void fft_util_pointwise_multiply_gemm_weight_gpu(cgemm_sizes sizes, const std::c
 template <typename Dtype>
 void fft_util_normalize_gpu(std::vector<int> shape, int fft_height, int fft_width,
                             const int stride_h, const int stride_w, const int pad_h, const int pad_w,
-                            Dtype normalize_factor, const Dtype *fft_result_real,
-                            Dtype *result, bool add_to_result);
+                            Dtype normalize_factor, Dtype *fft_result_real,
+                            Dtype *result, bool add_to_result, bool inplace);
 
 template <typename Dtype>
 void fft_util_geam_transpose_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,

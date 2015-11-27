@@ -12,7 +12,7 @@
 namespace caffe {
 template <typename Dtype>
 __global__ void pad_real_blob_gpu_kernel(const int K, const int H, const int W, const int fft_height, const int fft_width, const Dtype *blob_data, Dtype *padded_data,
-                                         const int pad_h, const int pad_w, const int stride_h, const int stride_w, bool inplace) {
+                                         const int pad_h, const int pad_w, const int stride_h, const int stride_w) {
 
   // blockDim (256, 1) ----- (num_output_, (ch_gr) / CUDA_NUM_THREADS)
   //                              x                y
@@ -24,7 +24,7 @@ __global__ void pad_real_blob_gpu_kernel(const int K, const int H, const int W, 
 
   if (hw < H*W) {
     // if inplace take fft_complex_size * 2 because complex has double the size [sizeof(std::complex)]
-    int fft_size = inplace ? fft_height * (fft_width / 2 + 1) * 2 : fft_height * fft_width;
+    int fft_size = fft_height * fft_width;
 
     for (int k = 0; k < K; ++k) {
       // get offset with channels and the idx of the output.
@@ -50,11 +50,11 @@ __global__ void pad_real_blob_gpu_kernel(const int K, const int H, const int W, 
 
 template __global__ void pad_real_blob_gpu_kernel<float>(const int K, const int H, const int W, const int fft_height, const int fft_width,
                                                          const float *blob_data, float *padded_data,
-                                                         const int pad_h, const int pad_w, const int stride_h, const int stride_w, bool inplace);
+                                                         const int pad_h, const int pad_w, const int stride_h, const int stride_w);
 
 template __global__ void pad_real_blob_gpu_kernel<double>(const int K, const int H, const int W, const int fft_height, const int fft_width,
                                                           const double *blob_data, double *padded_data,
-                                                          const int pad_h, const int pad_w, const int stride_h, const int stride_w, bool inplace);
+                                                          const int pad_h, const int pad_w, const int stride_h, const int stride_w);
 
 __global__ void fft_pointwise_multiply_float_gpu_kernel(const int N, const int K, const int H, const int W,
                                                         const int weight_group_size, const cufftComplex *ffted_bottom_data,
@@ -327,8 +327,8 @@ __global__ void fft_pointwise_multiply_weight_double_gpu_kernel(const int batch_
 template <typename Dtype>
 __global__ void fft_util_normalize_gpu_kernel(const int K, const int H, const int W, int fft_height, int fft_width,
                                               const int stride_h, const int stride_w, const int pad_h, const int pad_w,
-                                              Dtype normalize_factor, const Dtype *fft_result_real,
-                                              Dtype *result, bool add_to_result) {
+                                              Dtype normalize_factor, Dtype *fft_result_real,
+                                              Dtype *result, bool add_to_result, bool inplace) {
 
   // blockDim (256, 1) ----- (num_output_, (height_out) / CUDA_NUM_THREADS)
   //                              x                y
@@ -339,8 +339,9 @@ __global__ void fft_util_normalize_gpu_kernel(const int K, const int H, const in
   const int hw = blockIdx.z * blockDim.x + threadIdx.x;
 
   if (hw < H*W) {
-    const int fft_real_size = fft_height * fft_width;
-    const int fft_res_real_offset = (n * K + k) * fft_real_size;
+    const int fft_width_new = inplace ? (fft_width / 2 + 1) * 2 : fft_width;
+    const int fft_size = fft_height * fft_width_new;
+    const int fft_res_real_offset = (n * K + k) * fft_size;
     const int h = hw / W;
     const int w = hw % W;
 
@@ -353,7 +354,7 @@ __global__ void fft_util_normalize_gpu_kernel(const int K, const int H, const in
     const int result_idx = ((n * K + k) * H + h) * W + w;
 
     // the index in the data of the convolution result array (the real one)
-    const int fft_result_real_idx = fft_res_real_offset + h_idx * fft_width + w_idx;
+    const int fft_result_real_idx = fft_res_real_offset + h_idx * fft_width_new + w_idx;
 
     // normalize fft and sum up everything from the input channels...
     Dtype tmp_result = fft_result_real[fft_result_real_idx] * normalize_factor;
@@ -367,13 +368,13 @@ __global__ void fft_util_normalize_gpu_kernel(const int K, const int H, const in
 
 template __global__ void fft_util_normalize_gpu_kernel<float>(const int K, const int H, const int W, int fft_height, int fft_width,
                                                               const int stride_h, const int stride_w, const int pad_h, const int pad_w,
-                                                              float normalize_factor, const float *fft_result_real,
-                                                              float *result, bool add_to_result);
+                                                              float normalize_factor, float *fft_result_real,
+                                                              float *result, bool add_to_result, bool inplace);
 
 template __global__ void fft_util_normalize_gpu_kernel<double>(const int K, const int H, const int W, int fft_height, int fft_width,
                                                                const int stride_h, const int stride_w, const int pad_h, const int pad_w,
-                                                               double normalize_factor, const double *fft_result_real,
-                                                               double *result, bool add_to_result);
+                                                               double normalize_factor, double *fft_result_real,
+                                                               double *result, bool add_to_result, bool inplace);
 
 template <typename Dtype>
 __global__ void fft_util_permute_4d_gpu_kernel(const std::complex<Dtype> *in, std::complex<Dtype> *out,
@@ -525,14 +526,13 @@ void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int f
   const int H = shape[2];
   const int W = shape[3];
 
-  const int fft_real_size = fft_height * fft_width;
-
   int size = N * K; // # of arrays (for weights it is num_weights [96 x 3]
   // for input data it is channels [ 1 x 3]
 
   // if inplace take fft_complex_size * 2 because complex has double the size [sizeof(std::complex)]
-  size = inplace ? size * fft_height * (fft_width / 2 + 1) * 2 : size * fft_height * fft_width;
-
+  int fft_width_new = inplace ? (fft_width / 2 + 1) * 2 : fft_width;
+  int fft_size = fft_height * fft_width_new;
+  size = size * fft_size;
 
   // set everything to 0 before --> so not set weights are 0-padded :)
   caffe_gpu_memset(size * sizeof(Dtype), 0., padded_data);
@@ -543,8 +543,8 @@ void pad_real_blob_gpu(std::vector<int> shape, const int fft_height, const int f
   int thread_num = CAFFE_CUDA_NUM_THREADS;
 
   pad_real_blob_gpu_kernel<Dtype><<<block_num, thread_num>>>(
-      K, H, W, fft_height, fft_width, blob_data, padded_data,
-      pad_h, pad_w, stride_h, stride_w, inplace);
+      K, H, W, fft_height, fft_width_new, blob_data, padded_data,
+      pad_h, pad_w, stride_h, stride_w);
   CUDA_POST_KERNEL_CHECK;
 }
 
@@ -884,8 +884,8 @@ template void fft_util_pointwise_multiply_gemm_weight_gpu<double>(cgemm_sizes si
 template <typename Dtype>
 void fft_util_normalize_gpu(std::vector<int> shape, int fft_height, int fft_width,
                             const int stride_h, const int stride_w, const int pad_h, const int pad_w,
-                            Dtype normalize_factor, const Dtype *fft_result_real,
-                            Dtype *result, bool add_to_result) {
+                            Dtype normalize_factor, Dtype *fft_result_real,
+                            Dtype *result, bool add_to_result, bool inplace) {
 
   const int N = shape[0];
   const int K = shape[1];
@@ -898,19 +898,19 @@ void fft_util_normalize_gpu(std::vector<int> shape, int fft_height, int fft_widt
   fft_util_normalize_gpu_kernel<<<block_num, thread_num>>>
       (K, H, W, fft_height, fft_width, stride_h, stride_w,
        pad_h, pad_w, normalize_factor, fft_result_real,
-       result, add_to_result);
+       result, add_to_result, inplace);
   CUDA_POST_KERNEL_CHECK;
 }
 
 template void fft_util_normalize_gpu<float>(std::vector<int> shape, int fft_height, int fft_width,
                                             const int stride_h, const int stride_w, const int pad_h, const int pad_w,
-                                            float normalize_factor, const float *fft_result_real,
-                                            float *result, bool add_to_result);
+                                            float normalize_factor, float *fft_result_real,
+                                            float *result, bool add_to_result, bool inplace);
 
 template void fft_util_normalize_gpu<double>(std::vector<int> shape, int fft_height, int fft_width,
                                              const int stride_h, const int stride_w, const int pad_h, const int pad_w,
-                                             double normalize_factor, const double *fft_result_real,
-                                             double *result, bool add_to_result);
+                                             double normalize_factor, double *fft_result_real,
+                                             double *result, bool add_to_result, bool inplace);
 
 template <typename Dtype>
 void fft_util_geam_transpose_gpu(const std::complex<Dtype> *in, std::complex<Dtype> *out,
@@ -984,20 +984,31 @@ template void fft_util_permute_4d_gpu<double>(const std::complex<double> *in, st
 template<>
 void fft_gpu_plan_many_dft_r2c_2d<float>(cufftHandle *plan, int n0,
                                          int n1,
-                                         int how_many) {
+                                         int how_many,
+                                         bool inplace) {
   int rank = 2;
   int n[] = {n0, n1};
+  int n_inplace[] = {n0, 2 * (n1 / 2 + 1)};
+
+
   int idist = n0 * n1; /* = 256*256, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
+
+  int *inembed = n;
+  if (inplace) {
+    // in-place transform...
+    idist = n0 * (n1 / 2 + 1) * 2;
+    inembed = n_inplace;
+  }
   int istride = 1; /* array is contiguous in memory */
-  int *inembed = NULL;
 
   // out
   int odist = n0 * (n1 / 2 + 1);
   int ostride = 1;
-  int *onembed = NULL;
+  int n_o[] = {n0, n1 / 2 + 1};
+  int *onembed = n_o;
 
   CUFFT_CHECK(cufftCreate(plan));
   CUFFT_CHECK(cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed, ostride, odist, CUFFT_R2C, how_many));
@@ -1006,20 +1017,31 @@ void fft_gpu_plan_many_dft_r2c_2d<float>(cufftHandle *plan, int n0,
 template<>
 void fft_gpu_plan_many_dft_r2c_2d<double>(cufftHandle *plan, int n0,
                                           int n1,
-                                          int how_many) {
+                                          int how_many,
+                                          bool inplace) {
   int rank = 2;
   int n[] = {n0, n1};
+  int n_inplace[] = {n0, 2 * (n1 / 2 + 1)};
+
+
   int idist = n0 * n1; /* = 256*256, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
+
+  int *inembed = n;
+  if (inplace) {
+    // in-place transform...
+    idist = n0 * (n1 / 2 + 1) * 2;
+    inembed = n_inplace;
+  }
   int istride = 1; /* array is contiguous in memory */
-  int *inembed = NULL;
 
   // out
   int odist = n0 * (n1 / 2 + 1);
   int ostride = 1;
-  int *onembed = NULL;
+  int n_o[] = {n0, n1 / 2 + 1};
+  int *onembed = n_o;
 
   CUFFT_CHECK(cufftCreate(plan));
   CUFFT_CHECK(cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed, ostride, odist, CUFFT_D2Z, how_many));
@@ -1028,21 +1050,28 @@ void fft_gpu_plan_many_dft_r2c_2d<double>(cufftHandle *plan, int n0,
 template<>
 void fft_gpu_plan_many_dft_c2r_2d<float>(cufftHandle *plan, int n0,
                                          int n1,
-                                         int how_many) {
-
+                                         int how_many,
+                                         bool inplace) {
   int rank = 2;
   int n[] = {n0, n1};
+  int n_inplace[] = {n0, 2 * (n1 / 2 + 1)};
   int idist = n0 * (n1 / 2 + 1); /* = 256*129, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
   int istride = 1; /* array is contiguous in memory */
-  int *inembed = NULL;
+  int n_i[] = {n0, n1 / 2 + 1};
+  int *inembed = n_i;
 
   // out
   int odist = n0 * n1;
+  int *onembed = n;
+  if (inplace) {
+    // in-place transform...
+    odist = n0 * (n1 / 2 + 1) * 2;
+    onembed = n_inplace;
+  }
   int ostride = 1;
-  int *onembed = NULL;
 
   CUFFT_CHECK(cufftCreate(plan));
   CUFFT_CHECK(cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed, ostride, odist, CUFFT_C2R, how_many));
@@ -1051,21 +1080,28 @@ void fft_gpu_plan_many_dft_c2r_2d<float>(cufftHandle *plan, int n0,
 template<>
 void fft_gpu_plan_many_dft_c2r_2d<double>(cufftHandle *plan, int n0,
                                           int n1,
-                                          int how_many) {
-
+                                          int how_many,
+                                          bool inplace) {
   int rank = 2;
   int n[] = {n0, n1};
+  int n_inplace[] = {n0, 2 * (n1 / 2 + 1)};
   int idist = n0 * (n1 / 2 + 1); /* = 256*129, the distance in memory
                                           between the first element
                                           of the first array and the
                                           first element of the second array */
   int istride = 1; /* array is contiguous in memory */
-  int *inembed = NULL;
+  int n_i[] = {n0, n1 / 2 + 1};
+  int *inembed = n_i;
 
   // out
   int odist = n0 * n1;
+  int *onembed = n;
+  if (inplace) {
+    // in-place transform...
+    odist = n0 * (n1 / 2 + 1) * 2;
+    onembed = n_inplace;
+  }
   int ostride = 1;
-  int *onembed = NULL;
 
   CUFFT_CHECK(cufftCreate(plan));
   CUFFT_CHECK(cufftPlanMany(plan, rank, n, inembed, istride, idist, onembed, ostride, odist, CUFFT_Z2D, how_many));
