@@ -282,14 +282,14 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
     this->convolution_result_real_size_ = this->fft_real_size_ * this->num_output_ * this->num_ * sizeof(Dtype);
     this->convolution_result_complex_size_ = this->fft_complex_size_ * this->num_output_ * this->num_ * sizeof(std::complex<Dtype>);
 
-    LOG(ERROR) << "padded_weights_real_size_: " << padded_weights_real_size_;
-    LOG(ERROR) << "padded_weights_complex_size_: " << padded_weights_complex_size_;
-
-    LOG(ERROR) << "padded_bottom_real_size_: " << padded_bottom_real_size_;
-    LOG(ERROR) << "padded_bottom_complex_size_: " << padded_bottom_complex_size_;
-
-    LOG(ERROR) << "convolution_result_real_size_: " << convolution_result_real_size_;
-    LOG(ERROR) << "convolution_result_complex_size_: " << convolution_result_complex_size_;
+//    LOG(ERROR) << "padded_weights_real_size_: " << padded_weights_real_size_;
+//    LOG(ERROR) << "padded_weights_complex_size_: " << padded_weights_complex_size_;
+//
+//    LOG(ERROR) << "padded_bottom_real_size_: " << padded_bottom_real_size_;
+//    LOG(ERROR) << "padded_bottom_complex_size_: " << padded_bottom_complex_size_;
+//
+//    LOG(ERROR) << "convolution_result_real_size_: " << convolution_result_real_size_;
+//    LOG(ERROR) << "convolution_result_complex_size_: " << convolution_result_complex_size_;
 
     std::vector<int> top_shape;
     top_shape.push_back(this->num_);
