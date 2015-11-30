@@ -456,8 +456,6 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   size_t padded_weights_complex_size_;
   size_t padded_bottom_real_size_;
   size_t padded_bottom_complex_size_;
-  size_t padded_top_real_size_;
-  size_t padded_top_complex_size_;
   size_t convolution_result_real_size_;
   size_t convolution_result_complex_size_;
 
@@ -487,6 +485,10 @@ class ConvolutionLayerFFT : public ConvolutionLayer<Dtype> {
   cufftHandle ifft_plan_gpu_;
   cufftHandle ifft_backward_plan_gpu_;
   cufftHandle ifft_weight_plan_gpu_;
+
+  bool fft_top_plan_gpu__initialized_;
+  bool ifft_backward_plan_gpu_initialized_;
+  bool ifft_weight_plan_gpu_initialized_;
 
 
   std::complex<Dtype> *ptwise_result_gpu_;

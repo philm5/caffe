@@ -52,6 +52,10 @@ void ConvolutionLayerFFT<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void ConvolutionLayerFFT<Dtype>::LayerUpdateBeforeBatch() {
   ConvolutionLayer<Dtype>::LayerUpdateBeforeBatch();
+  if (!this->fft_initialized_) {
+    this->fft_set_up();
+  }
+
   switch (Caffe::mode()) {
     case Caffe::CPU:
       this->fft_update_weights_cpu();
@@ -226,18 +230,24 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
   if(this->fft_on_ && !this->fft_initialized_) {
     // set fft width and height to be the image width and height (Padding and kernel size are considered!). These
     // sizes are checked if they are a power of 2.
-    int w_to_check = this->input_shape(2) + std::max(2 * this->pad_.cpu_data()[1], (this->kernel_shape_.cpu_data()[1] - 1));
     int h_to_check = this->input_shape(1) + std::max(2 * this->pad_.cpu_data()[0], (this->kernel_shape_.cpu_data()[0] - 1));
+    int w_to_check = this->input_shape(2) + std::max(2 * this->pad_.cpu_data()[1], (this->kernel_shape_.cpu_data()[1] - 1));
+
+//    LOG(ERROR) << this->layer_param_.name() << " - H: " << this->input_shape(1) << " PAD_H: " <<
+//        this->pad_.cpu_data()[0] << " KERNEL_H: " << this->kernel_shape_.cpu_data()[0] <<
+//        " H_TO_CHECK: " << h_to_check;
 
     // Make the fft size a multiple of 16. FFTW and CUFFT perform best on FFT sizes which are factorable like this:
     // 2^a * 3^b * 5^c * 7^d. If divisible by 4 there is extra speed up.
     if ((h_to_check % 16) > 0) {
-      fft_height_ = h_to_check + (16 - (h_to_check % 16));
+      this->fft_height_ = h_to_check + (16 - (h_to_check % 16));
     }
 
     if ((w_to_check % 16) > 0) {
-      fft_width_ = w_to_check + (16 - (w_to_check % 16));
+      this->fft_width_ = w_to_check + (16 - (w_to_check % 16));
     }
+//
+//    LOG(ERROR) << "FFT_H: " << this->fft_height_;
 
     //  If not, round up to the next power of 2.
     //    if (!check_power_of_2(w_to_check)) {
@@ -268,12 +278,18 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up() {
     // now the sizes for the bottom data:
     this->padded_bottom_real_size_ = this->fft_real_size_ * this->channels_ * this->num_ * sizeof(Dtype);
     this->padded_bottom_complex_size_ = this->fft_complex_size_ * this->channels_ * this->num_ * sizeof(std::complex<Dtype>);
-    // now the sizes for the top data:
-    this->padded_top_real_size_ = this->fft_real_size_ * this->num_output_ * this->num_ * sizeof(Dtype);
-    this->padded_top_complex_size_ = this->fft_complex_size_ * this->num_output_ * this->num_ * sizeof(std::complex<Dtype>);
     // and the sizes for the result (before normalizing and applying the stride):
     this->convolution_result_real_size_ = this->fft_real_size_ * this->num_output_ * this->num_ * sizeof(Dtype);
     this->convolution_result_complex_size_ = this->fft_complex_size_ * this->num_output_ * this->num_ * sizeof(std::complex<Dtype>);
+
+    LOG(ERROR) << "padded_weights_real_size_: " << padded_weights_real_size_;
+    LOG(ERROR) << "padded_weights_complex_size_: " << padded_weights_complex_size_;
+
+    LOG(ERROR) << "padded_bottom_real_size_: " << padded_bottom_real_size_;
+    LOG(ERROR) << "padded_bottom_complex_size_: " << padded_bottom_complex_size_;
+
+    LOG(ERROR) << "convolution_result_real_size_: " << convolution_result_real_size_;
+    LOG(ERROR) << "convolution_result_complex_size_: " << convolution_result_complex_size_;
 
     std::vector<int> top_shape;
     top_shape.push_back(this->num_);
@@ -602,7 +618,7 @@ void ConvolutionLayerFFT<Dtype>::fft_top_cpu(const Dtype *top) {
 #if FFT_CONVOLUTION_KIND == FFT_CONVOLUTION_KIND_CGEMM
   // transpose input if cgemm pt-wise product should be done
   std::complex<Dtype> *fft_transposed_top =
-      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->padded_top_complex_size_));
+      reinterpret_cast<std::complex<Dtype> *>(fft_cpu_malloc<Dtype>(this->convolution_result_complex_size_));
   const int shape_top[] = {this->num_, this->num_output_, this->fft_height_, (this->fft_width_ / 2) + 1};
   // const int permutation_bottom[] = {2, 3, 0, 1};
   this->fft_geam_transpose_cpu(this->ptwise_result_, fft_transposed_top, shape_top, 2);

@@ -308,13 +308,13 @@ const char* cufftGetErrorString(cufftResult_t error) {
     return "CUFFT_PARSE_ERROR";
   case CUFFT_NO_WORKSPACE:
     return "CUFFT_NO_WORKSPACE";
+  default:
+    return "Unknown cufft error";
   }
-  return "Unknown cufft error";
 }
 
 const char* nppGetErrorString(NppStatus error) {
   switch (error) {
-
     case NPP_NOT_SUPPORTED_MODE_ERROR:
       return "NPP_NOT_SUPPORTED_MODE_ERROR";
     case NPP_INVALID_HOST_POINTER_ERROR:
@@ -443,8 +443,9 @@ const char* nppGetErrorString(NppStatus error) {
       return "NPP_DOUBLE_SIZE_WARNING";
     case NPP_MISALIGNED_DST_ROI_WARNING:
       return "NPP_MISALIGNED_DST_ROI_WARNING";
+    default:
+      return "Unknown npp error";
   }
-  return "Unknown npp error";
 }
 #endif
 

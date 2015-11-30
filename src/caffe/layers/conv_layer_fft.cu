@@ -159,7 +159,7 @@ template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
   CUDA_CHECK(cudaMalloc(&this->ffted_weights_, this->padded_weights_complex_size_));
 
-  fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_weight_plan_, this->fft_height_, this->fft_width_, this->num_weights_,
+  fft_gpu_plan_many_dft_r2c_2d<Dtype>(&this->fft_weight_plan_, this->fft_height_, this->fft_width_, this->num_weights_,
                                       this->fft_inplace_);
 
   // init the weights...
@@ -167,11 +167,8 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
 
   // Set-up bottom plan once
   // Create FFT plan for the bottom data
-  fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_bottom_plan_gpu_, this->fft_height_, this->fft_width_,
+  fft_gpu_plan_many_dft_r2c_2d<Dtype>(&this->fft_bottom_plan_gpu_, this->fft_height_, this->fft_width_,
                                       this->channels_ * this->num_, this->fft_inplace_);
-  // Create FFT plan for the top data
-  fft_top_plan_gpu_ = NULL;
-
   // Allocate the real and complex memory for the bottom data
   CUDA_CHECK(cudaMalloc(&this->ffted_bottom_data_gpu_, this->padded_bottom_complex_size_));
   CUDA_CHECK(cudaMalloc(&this->ptwise_result_gpu_, this->convolution_result_complex_size_));
@@ -183,10 +180,14 @@ void ConvolutionLayerFFT<Dtype>::fft_set_up_gpu() {
   }
 
   // Init other plans
-  fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_plan_gpu_, this->fft_height_, this->fft_width_,
+  fft_gpu_plan_many_dft_c2r_2d<Dtype>(&this->ifft_plan_gpu_, this->fft_height_, this->fft_width_,
                                       this->num_output_ * this->num_, this->fft_inplace_);
-  ifft_backward_plan_gpu_ = NULL;
-  ifft_weight_plan_gpu_ = NULL;
+
+  // Do not init plans needed for backward unless we have to...
+
+  this->fft_top_plan_gpu__initialized_ = false;
+  this->ifft_backward_plan_gpu_initialized_ = false;
+  this->ifft_weight_plan_gpu_initialized_ = false;
 }
 
 template<typename Dtype>
@@ -197,7 +198,6 @@ void ConvolutionLayerFFT<Dtype>::fft_update_weights_gpu() {
   shape.push_back((this->channels_ / this->group_));
   shape.push_back(this->kernel_shape_.cpu_data()[0]);
   shape.push_back(this->kernel_shape_.cpu_data()[1]);
-
   if (!this->fft_inplace_) {
     Dtype *padded_real_weights_gpu;
     CUDA_CHECK(cudaMalloc(&padded_real_weights_gpu, this->padded_weights_real_size_));
@@ -283,9 +283,10 @@ template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_top_gpu(const Dtype *top) {
   const Dtype *top_blob = top;
 
-  if (this->fft_top_plan_gpu_ == NULL) {
-    fft_gpu_plan_many_dft_r2c_2d<Dtype>(&fft_top_plan_gpu_, this->fft_height_, this->fft_width_,
+  if (!this->fft_top_plan_gpu__initialized_) {
+    fft_gpu_plan_many_dft_r2c_2d<Dtype>(&this->fft_top_plan_gpu_, this->fft_height_, this->fft_width_,
                                         this->num_output_ * this->num_, this->fft_inplace_);
+    this->fft_top_plan_gpu__initialized_ = true;
   }
 
   if (!this->fft_inplace_) {
@@ -307,7 +308,7 @@ void ConvolutionLayerFFT<Dtype>::fft_top_gpu(const Dtype *top) {
   const int shape_top[] = {this->num_, this->num_output_, this->fft_height_, (this->fft_width_ / 2) + 1};
   // transpose input if cgemm pt-wise product should be done
   std::complex<Dtype> *fft_transposed_top;
-  CUDA_CHECK(cudaMalloc(&fft_transposed_top, this->padded_top_complex_size_));
+  CUDA_CHECK(cudaMalloc(&fft_transposed_top, this->convolution_result_complex_size_));
   fft_util_geam_transpose_gpu(this->ptwise_result_gpu_, fft_transposed_top, shape_top, 2);
   CUDA_CHECK(cudaFree(this->ptwise_result_gpu_));
   this->ptwise_result_gpu_ = fft_transposed_top;
@@ -444,9 +445,10 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_gpu(Dtype *top_data) {
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_normalize_backward_gpu(Dtype *bottom){
-  if (this->ifft_backward_plan_gpu_ == NULL) {
-    fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_backward_plan_gpu_, this->fft_height_, this->fft_width_,
+  if (!this->ifft_backward_plan_gpu_initialized_) {
+    fft_gpu_plan_many_dft_c2r_2d<Dtype>(&this->ifft_backward_plan_gpu_, this->fft_height_, this->fft_width_,
                                         this->channels_ * this->num_, this->fft_inplace_);
+    this->ifft_backward_plan_gpu_initialized_ = true;
   }
 
   Dtype *iffted_result = this->padded_real_bottom_gpu_;
@@ -470,14 +472,15 @@ void ConvolutionLayerFFT<Dtype>::fft_normalize_backward_gpu(Dtype *bottom){
 
 template<typename Dtype>
 void ConvolutionLayerFFT<Dtype>::fft_normalize_weight_gpu(Dtype *weight) {
-  if (this->ifft_weight_plan_gpu_ == NULL) {
-    fft_gpu_plan_many_dft_c2r_2d<Dtype>(&ifft_weight_plan_gpu_, this->fft_height_, this->fft_width_,
+  if (!this->ifft_weight_plan_gpu_initialized_) {
+    fft_gpu_plan_many_dft_c2r_2d<Dtype>(&this->ifft_weight_plan_gpu_, this->fft_height_, this->fft_width_,
                                         this->num_weights_, this->fft_inplace_);
+    this->ifft_weight_plan_gpu_initialized_ = true;
   }
 
   Dtype *iffted_result;
   if (this->fft_inplace_) {
-    iffted_result = reinterpret_cast<Dtype *>(this->ffted_bottom_data_gpu_);
+    iffted_result = reinterpret_cast<Dtype *>(this->ffted_weights_);
   } else {
     CUDA_CHECK(cudaMalloc(&iffted_result, this->padded_weights_real_size_));
   }
