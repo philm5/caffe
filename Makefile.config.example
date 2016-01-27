@@ -7,6 +7,11 @@
 # CPU-only switch (uncomment to build without GPU support).
 # CPU_ONLY := 1
 
+# The switches for the FFT implementation.
+FFT := 1
+OPENMP := 1
+# IPP := 1
+
 # uncomment to disable IO dependencies and corresponding data layers
 # USE_OPENCV := 0
 # USE_LEVELDB := 0
@@ -43,7 +48,7 @@ CUDA_ARCH := -gencode arch=compute_20,code=sm_20 \
 # atlas for ATLAS (default)
 # mkl for MKL
 # open for OpenBlas
-BLAS := atlas
+BLAS := mkl
 # Custom (MKL/ATLAS/OpenBLAS) include and lib directories.
 # Leave commented to accept the defaults for your choice of BLAS
 # (which should work)!
