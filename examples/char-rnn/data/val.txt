@@ -1,0 +1,1 @@
+./examples/char-rnn/data/shakespeare_val.h5

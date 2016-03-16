@@ -1,0 +1,1 @@
+./examples/char-rnn/data/reddit_val.h5

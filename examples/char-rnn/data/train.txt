@@ -1,0 +1,1 @@
+./examples/char-rnn/data/shakespeare_train.h5

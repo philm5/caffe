@@ -1,0 +1,19 @@
+net: "./examples/char-rnn/char-rnn_model.prototxt"
+train_state: { stage: 'embed-drop' stage: 'lstm-drop' }
+test_iter: 25
+test_state: { stage: 'test-on-val' }
+test_interval: 1000
+base_lr: 0.1
+lr_policy: "step"
+gamma: 0.5
+stepsize: 1790  # lower lr every 5 epochs (5*358)
+display: 10
+max_iter: 17900 # 50 epochs; because batch_size = 50 and there are 17900 samples -->  358 iter with 50 samples each are one epoch
+momentum: 0.9
+weight_decay: 0.0000
+snapshot: 5000
+snapshot_prefix: "./examples/char-rnn/char-rnn"
+solver_mode: GPU
+random_seed: 1701
+average_loss: 100
+clip_gradients: 5

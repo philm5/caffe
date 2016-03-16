@@ -16,7 +16,7 @@ COCO_IMAGE_ROOT = '%s/images' % COCO_PATH
 MAX_HASH = 100000
 
 sys.path.append(COCO_TOOL_PATH)
-from coco import COCO
+from pycocotools.coco import COCO
 
 from hdf5_sequence_generator import SequenceGenerator, HDF5SequenceWriter
 
