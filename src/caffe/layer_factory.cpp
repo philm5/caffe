@@ -27,6 +27,10 @@
 #include "caffe/layers/cudnn_tanh_layer.hpp"
 #endif
 
+// My new layers
+#include "caffe/layers/add_layer.hpp"
+#include "caffe/layers/max_conv_layer.hpp"
+
 #ifdef WITH_PYTHON_LAYER
 #include "caffe/layers/python_layer.hpp"
 #endif
@@ -237,6 +241,22 @@ shared_ptr<Layer<Dtype> > GetTanHLayer(const LayerParameter& param) {
 }
 
 REGISTER_LAYER_CREATOR(TanH, GetTanHLayer);
+
+// Get add layer
+template <typename Dtype>
+shared_ptr<Layer<Dtype> > GetAddLayer(const LayerParameter& param) {
+  return shared_ptr<Layer<Dtype> >(new AddLayer<Dtype>(param));
+}
+
+REGISTER_LAYER_CREATOR(Add, GetAddLayer);
+
+// Get max conv layer
+template <typename Dtype>
+shared_ptr<Layer<Dtype> > GetMaxConvolutionLayer(const LayerParameter& param) {
+  return shared_ptr<Layer<Dtype> >(new MaxConvolutionLayer<Dtype>(param));
+}
+
+REGISTER_LAYER_CREATOR(MaxConvolution, GetMaxConvolutionLayer);
 
 #ifdef WITH_PYTHON_LAYER
 template <typename Dtype>

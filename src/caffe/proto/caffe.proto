@@ -306,7 +306,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 145 (last added: crop_param)
+// LayerParameter next available layer-specific ID: 147 (last added: max_convolution_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -396,6 +396,8 @@ message LayerParameter {
   optional ThresholdParameter threshold_param = 128;
   optional TileParameter tile_param = 138;
   optional WindowDataParameter window_data_param = 129;
+  optional AddParameter add_layer_param = 146;
+  optional MaxConvolutionParameter max_convolution_param = 147;
 }
 
 // Message that stores parameters used to apply transformation
@@ -615,6 +617,16 @@ message CropParameter {
   // axis).
   optional int32 axis = 1 [default = 2];
   repeated uint32 offset = 2;
+}
+
+message AddParameter {
+  optional uint32 num_output = 1; // The number of outputs for the layer
+}
+
+message MaxConvolutionParameter {
+  optional bool scale_term = 1 [default = true]; // whether to scale inputs beforehand. Corresponding weights have to be stored in blobs_[1]
+  optional bool max_conv = 2 [default = true]; // whether to have max or min convolution
+  optional uint32 kernel_size = 3; // The kernel size (square)
 }
 
 message DataParameter {
