@@ -4,6 +4,8 @@
 #include "caffe/layer_factory.hpp"
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/vision_layers.hpp"
+#include "caffe/layers/add_layer.hpp"
+#include "caffe/layers/max_conv_layer.hpp"
 
 #ifdef WITH_PYTHON_LAYER
 #include "caffe/python_layer.hpp"
@@ -156,6 +158,22 @@ shared_ptr<Layer<Dtype> > GetTanHLayer(const LayerParameter& param) {
 }
 
 REGISTER_LAYER_CREATOR(TanH, GetTanHLayer);
+
+// Get add layer
+template <typename Dtype>
+shared_ptr<Layer<Dtype> > GetAddLayer(const LayerParameter& param) {
+  return shared_ptr<Layer<Dtype> >(new AddLayer<Dtype>(param));
+}
+
+REGISTER_LAYER_CREATOR(Add, GetAddLayer);
+
+// Get add layer
+template <typename Dtype>
+shared_ptr<Layer<Dtype> > GetMaxConvolutionLayer(const LayerParameter& param) {
+  return shared_ptr<Layer<Dtype> >(new MaxConvolutionLayer<Dtype>(param));
+}
+
+REGISTER_LAYER_CREATOR(MaxConvolution, GetMaxConvolutionLayer);
 
 #ifdef WITH_PYTHON_LAYER
 template <typename Dtype>
