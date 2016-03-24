@@ -20,7 +20,6 @@ void MaxConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   kernel_w_ = max_param.kernel_size();
   max_conv_ = max_param.max_conv();
   scale_term_ = max_param.scale_term();
-  CHECK_GT(num_output_, 0) << "Number of outputs cannot be zero.";
   CHECK_GT(kernel_h_, 0) << "Kernel size cannot be zero.";
 
   // Handle the parameters: weights.
@@ -82,6 +81,44 @@ void MaxConvolutionLayer<Dtype>::compute_output_shape() {
 template<typename Dtype>
 void MaxConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                                              const vector<Blob<Dtype>*>& top) {
+  const Dtype *bottom_ptr = bottom[0]->cpu_data();
+  const Dtype *kernel_weight_ptr = this->blobs_[0]->cpu_data();
+  Dtype *top_ptr = top[0]->mutable_cpu_data();
+
+  int k_half = (kernel_h_ - 1 ) / 2; // we only support quadratic kernels and assume uneven filter sizes...
+
+  for(int batch_idx = 0; batch_idx < num_; ++batch_idx) {
+    for(int k = 0; k < channels_; ++k) {
+      // ((n * K + k) * H + h) * W + w
+      const Dtype *bottom_data = bottom_ptr + ((batch_idx * channels_ + k) * height_) * width_;
+      const Dtype *kernel_weight_data = kernel_weight_ptr + k * kernel_h_ * kernel_w_;
+      Dtype *top_data = top_ptr + ((batch_idx * channels_ + k) * height_) * width_;
+
+      // max-convolution / dt
+      for (int y = 0; y < height_; ++y) {
+        for (int x = 0; x < width_; ++x) {
+          Dtype max_val = boost::math::tools::min_value<Dtype>();
+          for (int q = 0; q < kernel_h_; ++q) {
+            for (int r = 0; r < kernel_w_; ++r) {
+              int y_bottom = y + (q - k_half);
+              int x_bottom = x + (r - k_half);
+
+              // ignore borders...
+              if (! (y_bottom < 0 || x_bottom < 0 || y_bottom >= height_ || x_bottom >= width_)) {
+                // - for max conv and + for min conv ???
+                Dtype tmp = bottom_data[y_bottom * width_ + x_bottom] - kernel_weight_data[q * kernel_w_ + r];
+                max_val = std::max(tmp, max_val);
+              }
+            }
+          }
+
+          top_data[y * width_ + x] = max_val;
+        }
+      }
+
+    }
+  }
+  LOG(ERROR) << "MaxConv Forward!";
 }
 
 template<typename Dtype>

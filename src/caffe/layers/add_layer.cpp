@@ -74,7 +74,7 @@ void AddLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype *bottom_ptr = bottom[0]->cpu_data();
   Dtype *top_ptr = top[0]->mutable_cpu_data();
   // set mem to 0 before adding on top of it...
-  caffe_memset(num_ * num_output_ * height_out_  * width_out_ * sizeof(Dtype), 0., top_ptr);
+  //caffe_memset(num_ * num_output_ * height_out_  * width_out_ * sizeof(Dtype), 0., top_ptr);
   const Dtype *weight = this->blobs_[0]->cpu_data();
 
   // TODO: optmize loops?
