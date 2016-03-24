@@ -165,15 +165,15 @@ shared_ptr<Layer<Dtype> > GetAddLayer(const LayerParameter& param) {
   return shared_ptr<Layer<Dtype> >(new AddLayer<Dtype>(param));
 }
 
-REGISTER_LAYER_CREATOR(Add, GetAddLayer);
+REGISTER_LAYER_CREATOR(AddLayer, GetAddLayer);
 
-// Get add layer
-template <typename Dtype>
-shared_ptr<Layer<Dtype> > GetMaxConvolutionLayer(const LayerParameter& param) {
-  return shared_ptr<Layer<Dtype> >(new MaxConvolutionLayer<Dtype>(param));
-}
-
-REGISTER_LAYER_CREATOR(MaxConvolution, GetMaxConvolutionLayer);
+//// Get add layer
+//template <typename Dtype>
+//shared_ptr<Layer<Dtype> > GetMaxConvolutionLayer(const LayerParameter& param) {
+//  return shared_ptr<Layer<Dtype> >(new MaxConvolutionLayer<Dtype>(param));
+//}
+//
+//REGISTER_LAYER_CREATOR(MaxConvolution, GetMaxConvolutionLayer);
 
 #ifdef WITH_PYTHON_LAYER
 template <typename Dtype>

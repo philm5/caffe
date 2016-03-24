@@ -31,6 +31,7 @@ class ClassifierSimple {
   cv::Mat *Forward(const cv::Mat& img);
 
   void SaveNetwork(const string& out_file);
+  shared_ptr<Net<float> > net_;
 
  private:
   void SetMean(const string& mean_file);
@@ -43,7 +44,6 @@ class ClassifierSimple {
                   std::vector<cv::Mat>* input_channels);
 
  private:
-  shared_ptr<Net<float> > net_;
   cv::Size input_geometry_;
   int num_channels_;
   cv::Mat mean_;
@@ -295,18 +295,42 @@ int main(int argc, char** argv) {
   CHECK(!img.empty()) << "Unable to decode image " << file;
   cv::Mat *res = classifier.Forward(img);
 
+
+
   cv::imshow("a", img);
   cv::waitKey(0);
-  cv::Mat resized;
-  cv::Mat result = res[117];
 
+
+  cv::Mat resized;
+  cv::Mat result;
+  cv::Mat roi;
+  // get added idpr stuff
+  shared_ptr<Blob<float> > output = classifier.net_->blob_by_name("idprclasses");
+  int num_outputs = output->shape(1);
+  cv::Mat *residpr = new cv::Mat[num_outputs];
+  for (int n = 0; n < num_outputs; ++n) {
+    cv::Mat tmp = cv::Mat(output->shape(2), output->shape(3), CV_32FC1);
+    const void *src = reinterpret_cast<const void *>(output->cpu_data() + output->offset(0, n, 0, 0));
+    memcpy(tmp.ptr(0), src, output->shape(2) * output->shape(3) * sizeof(float));
+    residpr[n] = tmp;
+  }
+
+  result = residpr[42];
   resized = cv::Mat::zeros(576, 720, CV_32FC1);
-  cv::Mat roi = resized( cv::Rect( RES_SHIFT, RES_SHIFT, round(result.cols * RES_RESIZE), round(result.rows * RES_RESIZE) ) );
+  roi = resized( cv::Rect( RES_SHIFT, RES_SHIFT, round(result.cols * RES_RESIZE), round(result.rows * RES_RESIZE) ) );
+  cv::resize( result, roi, cv::Size(roi.cols, roi.rows) );
+  cv::imshow("before-dt", resized);
+  cv::waitKey(0);
+
+  // show dt stuff
+  result = res[42];
+  resized = cv::Mat::zeros(576, 720, CV_32FC1);
+  roi = resized( cv::Rect( RES_SHIFT, RES_SHIFT, round(result.cols * RES_RESIZE), round(result.rows * RES_RESIZE) ) );
   cv::resize( result, roi, cv::Size(roi.cols, roi.rows) );
   cv::imshow("out", resized);
   cv::waitKey(0);
   // save network
-  // classifier.SaveNetwork("models/swimmers_fullconv/out_new.binaryproto");
+  classifier.SaveNetwork("models/swimmers_fullconv/out_new.binaryproto");
 
 
 //

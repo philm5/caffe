@@ -25,7 +25,7 @@ class AddLayer : public Layer<Dtype> {
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
 
-  virtual inline const char* type() const { return "Add"; }
+  virtual inline const char* type() const { return "AddLayer"; }
 
  protected:
   virtual void  compute_output_shape();
