@@ -329,6 +329,10 @@ int main(int argc, char** argv) {
   cv::imshow("out", result);
   cv::waitKey(0);
 
+  cv::Mat tmp;
+  result.convertTo(tmp, CV_8UC3, 255.0);
+  cv::imwrite("out_fast.png", tmp);
+
   // resize if small image:
 
   cv::Size res_size = result.size();

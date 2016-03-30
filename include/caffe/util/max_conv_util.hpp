@@ -6,6 +6,9 @@ namespace caffe {
 template <typename Dtype>
 void max_convolution_gpu(const Dtype *bottom, const Dtype *weight, Dtype *top,
                          int kernel_h, int kernel_w, int num, int channels, int height, int width);
+template <typename Dtype>
+void fast_max_convolution_gpu(const Dtype *bottom, const Dtype *weight, Dtype *top,
+                              int kernel_h, int kernel_w, int num, int channels, int height, int width);
 
 
 }
