@@ -1,0 +1,1 @@
+./build/examples/cpp_classification_simple/classification.bin models/swimmers_fullconv/swimmers_fullconv.prototxt models/swimmers_fullconv/out_new2.binaryproto models/swimmers_fullconv/swimmer01.jpg 
