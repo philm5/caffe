@@ -99,7 +99,7 @@ void AddLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 }
 
 #ifdef CPU_ONLY
-//STUB_GPU(AddLayer);
+STUB_GPU(AddLayer);
 #endif
 
 INSTANTIATE_CLASS(AddLayer);

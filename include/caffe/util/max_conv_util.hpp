@@ -1,0 +1,15 @@
+#ifndef MAX_CONV_UTIL_HPP_
+#define MAX_CONV_UTIL_HPP_
+
+namespace caffe {
+
+template <typename Dtype>
+void max_convolution_gpu(const Dtype *bottom, const Dtype *weight, Dtype *top,
+                         int kernel_h, int kernel_w, int num, int channels, int height, int width);
+
+
+}
+
+
+
+#endif /* MAX_CONV_UTIL_HPP_ */

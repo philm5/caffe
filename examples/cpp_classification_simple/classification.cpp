@@ -54,6 +54,7 @@ class ClassifierSimple {
 ClassifierSimple::ClassifierSimple(const string& model_file,
                        const string& trained_file) {
 #ifdef CPU_ONLY
+  LOG(ERROR) << "CPU";
   Caffe::set_mode(Caffe::CPU);
 #else
   Caffe::set_mode(Caffe::GPU);
@@ -324,13 +325,25 @@ int main(int argc, char** argv) {
 
   // show dt stuff
   result = res[42];
-  resized = cv::Mat::zeros(576, 720, CV_32FC1);
-  roi = resized( cv::Rect( RES_SHIFT, RES_SHIFT, round(result.cols * RES_RESIZE), round(result.rows * RES_RESIZE) ) );
-  cv::resize( result, roi, cv::Size(roi.cols, roi.rows) );
-  cv::imshow("out", resized);
+
+  cv::imshow("out", result);
   cv::waitKey(0);
+
+  // resize if small image:
+
+  cv::Size res_size = result.size();
+
+  if (res_size.width < 720) {
+      resized = cv::Mat::zeros(576, 720, CV_32FC1);
+      roi = resized( cv::Rect( RES_SHIFT, RES_SHIFT, round(result.cols * RES_RESIZE), round(result.rows * RES_RESIZE) ) );
+      cv::resize( result, roi, cv::Size(roi.cols, roi.rows) );
+      cv::imshow("resized", resized);
+      cv::waitKey(0);
+  }
+
+
   // save network
-  classifier.SaveNetwork("models/swimmers_fullconv/out_new.binaryproto");
+  // classifier.SaveNetwork("models/swimmers_fullconv/out_new.binaryproto");
 
 
 //
