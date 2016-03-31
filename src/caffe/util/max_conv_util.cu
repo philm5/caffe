@@ -73,7 +73,7 @@ __global__ void fast_max_convolution_gpu_kernel(const Dtype *bottom,
                                                 int kernel_h, int kernel_w,
                                                 int kernel_radius, int channels,
                                                 int height, int width,
-                                                int tile_dim, int shared_mem_length);
+                                                int tile_dim, int tiles_per_row, int shared_mem_length);
 
 
 template<>
@@ -82,7 +82,7 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
                                                        int kernel_h, int kernel_w,
                                                        int kernel_radius, int channels,
                                                        int height, int width,
-                                                       int tile_dim, int shared_mem_length) {
+                                                       int tile_dim, int tiles_per_row, int shared_mem_length) {
   const int batch_idx = blockIdx.x;
   const int k = blockIdx.y;
 
@@ -91,9 +91,14 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
 
   // tiles are quadratically... get initial offset...
   const int tile_idx = blockIdx.z; // * blockDim.x + threadIdx.x;
-  const int tiles_per_row = width / tile_dim + 1; // calculate outside?
-  const int y_offset = (tile_idx / tiles_per_row) * tile_dim;
-  const int x_offset = (tile_idx % tiles_per_row) * tile_dim;
+  const int y_tile_idx = (tile_idx / tiles_per_row);
+  const int x_tile_idx = (tile_idx % tiles_per_row);
+
+
+  printf("tile_idx %d, y %d, x %d\n", tile_idx, y_tile_idx, x_tile_idx);
+
+  const int y_offset = y_tile_idx * tile_dim;
+  const int x_offset = x_tile_idx * tile_dim;
 
   const int y_start = y_offset - kernel_radius;
   const int x_start = x_offset - kernel_radius;
@@ -106,51 +111,56 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
   // ***************▼               ◢**************
   // *************** (kernel_radius) **************
 
-  // every thread has to copy some amount of values from global to shared memory
-  __shared__ float shared_data[4356];
 
+  // We store a tile of the bottom data here + the kernel
+  extern __shared__ float shared_data[];
+
+  // every thread has to copy some amount of values from global to shared memory
   const int shared_data_size = shared_mem_length * shared_mem_length;
   const int copy_count = (shared_data_size / blockDim.x) + 1; // calculated outside !? e.g. [(50*50)/512] + 1 = 5
 
-
-  // offset of current thread inside the global memory...
+  // offset of current thread inside the shared memory...
   const int inner_offset = threadIdx.x * copy_count;
-
-
-  //printf("BLOCK(%d, %d, %d) -- threadIdx: %d, xstart: %d, ystart: %d, inneroffset: %d\n", blockIdx.x, blockIdx.y, blockIdx.z, threadIdx.x, x_start, y_start, inner_offset);
 
   for (int i = 0; i < copy_count; ++i) {
     const int copy_offset = (inner_offset + i);
     const int shared_mem_y_offset = copy_offset / shared_mem_length;
     const int shared_mem_x_offset = copy_offset % shared_mem_length;
-    //printf("copy_offset %d, shared_mem_len %d -- y_off: %d, x_off: %d\n", copy_offset, shared_mem_length, shared_mem_y_offset, shared_mem_x_offset);
 
     // case III: we are at the end of a tile (including apron!) --> set x to x_start and current y to +=1
     const int src_y = y_start + shared_mem_y_offset; // handles case III
     const int src_x = x_start + shared_mem_x_offset; // handles case III
 
-
-
-    // printf("copy_offset: %d, shared_data_size: %d, shared_data[0] = %f\n", copy_offset, shared_data_size, shared_data[0]);
-
    // don't copy data outside of the allocated space
     if (copy_offset < shared_data_size) {
       // find destination ptr
-      //float *dst = shared_data + copy_offset;
-
-      //printf("y, x -- shared_data[%d] = %f -- y_off: %d, x_off: %d\n", src_y, src_x, copy_offset, dst, shared_mem_y_offset, shared_mem_x_offset);
-
+      float *dst = shared_data + copy_offset;
       // case I  : we are at the end of a row/column in the image? --> fill 0s into shared mem
       // case II : we are before the beginning of a row/column in a the image? --> fill 0s into shared mem
       if (src_y < 0 || src_x < 0 || src_x > width || src_y > height) {
-        shared_data[copy_offset] = 0.;
+        *dst = 0.;
       } else {
-        float tmp = bottom_data[(src_y * width) + src_x];
-
-        shared_data[copy_offset] = tmp;
+        *dst = bottom_data[(src_y * width) + src_x];
       }
-      //printf("copy_off: %d\n", copy_offset);
+    }
+  }
 
+  // write kernel to shared mem
+  // ------------------------------
+  // we use one array in the shared memory for both data and kernel (we only dynamically alloc one array from outside the kernel)
+  float *kernel = shared_data + shared_data_size;
+  const int k_shared_mem_size = kernel_h * kernel_w;
+  const int k_copy_count = (k_shared_mem_size / blockDim.x) + 1; // calculated outside !? e.g. [(50*50)/512] + 1 = 5
+  // offset of current thread inside the kernel shared memory...
+  const int k_inner_offset = threadIdx.x * k_copy_count;
+
+  // offset to kernel
+  const float *kernel_weight_data = weight + k * kernel_h * kernel_w;
+
+  for (int i = 0; i < k_copy_count; ++i) {
+    int idx = k_inner_offset + i;
+    if (idx < k_shared_mem_size) {
+      kernel[idx] = kernel_weight_data[idx];
     }
   }
 
@@ -160,11 +170,8 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
   const int hw = threadIdx.x;
 
   if (hw < tile_dim * tile_dim) {
-    int y = (hw / tile_dim); // + kernel_radius;
-    int x = (hw % tile_dim); // + kernel_radius;
-
-    // TODO: copy to constant memory?
-    const float *kernel_weight_data = weight + k * kernel_h * kernel_w;
+    int y = (hw / tile_dim);
+    int x = (hw % tile_dim);
 
     float max_val = FLT_MIN;
     for (int q = 0; q < kernel_h; ++q) {
@@ -174,12 +181,12 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
 
           // - for max conv and + for min conv ???
           float tmp = shared_data[y_bottom * shared_mem_length + x_bottom]
-              - kernel_weight_data[q * kernel_w + r];
+              - kernel[q * kernel_w + r];
           max_val = fmaxf(tmp, max_val);
       }
     }
 
-    // make sure not to write outside top!!!
+    // we write in global memory, because we only acces each location once
     float *top_data = top + ((batch_idx * channels + k) * height) * width;
     const int top_idx = (y + y_offset) * width + (x + x_offset);
     top_data[top_idx] = max_val;
@@ -193,7 +200,7 @@ __global__ void fast_max_convolution_gpu_kernel<double>(const double *bottom,
                                                         int kernel_h, int kernel_w,
                                                         int kernel_radius, int channels,
                                                         int height, int width,
-                                                        int tile_dim, int shared_mem_length) {
+                                                        int tile_dim, int tiles_per_row, int shared_mem_length) {
   // TODO: implement double version...
 }
 
@@ -231,21 +238,27 @@ void fast_max_convolution_gpu(const Dtype *bottom, const Dtype *weight, Dtype *t
                          int kernel_h, int kernel_w, int num, int channels,
                          int height, int width) {
 
-  int tile_dim = 32; //sqrt(CAFFE_CUDA_NUM_THREADS);
-  int z_blocks = ((height / tile_dim) + 1)  * ((width / tile_dim) + 1);
+#define TITAN_NUM_THREADS 1024
+
+  int tile_dim = sqrt(TITAN_NUM_THREADS);
+  const int tiles_per_row = width / tile_dim + 1;
+  const int tiles_per_col = height / tile_dim + 1;
+  printf("tpr %d, tpc %d\n", tiles_per_row, tiles_per_col);
+  int z_blocks = (tiles_per_col  * tiles_per_row);
 
   dim3 block_num(num, channels, z_blocks);
-  int thread_num = 1024; //CAFFE_CUDA_NUM_THREADS;
+  int thread_num = TITAN_NUM_THREADS;
 
   int k_radius = (kernel_h - 1) / 2;  // we only support quadratic kernels and assume uneven filter sizes...
 
   const int shared_mem_length = (tile_dim + 2 * k_radius);
-  int shared_mem_size = shared_mem_length * shared_mem_length;
+  // size of bottom data region + kernel region
+  int shared_mem_size = (shared_mem_length * shared_mem_length + kernel_h * kernel_w) * sizeof(Dtype);
 
   fast_max_convolution_gpu_kernel<<<block_num, thread_num, shared_mem_size>>>(bottom, weight, top,
                                                             kernel_h, kernel_w,
                                                             k_radius, channels,
-                                                            height, width, tile_dim, shared_mem_length);
+                                                            height, width, tile_dim, tiles_per_row, shared_mem_length);
 
 }
 
