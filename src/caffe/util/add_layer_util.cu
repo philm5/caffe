@@ -25,9 +25,13 @@ __global__ void add_layers_gpu_kernel<float>(const float *bottom,
         + ((batch_idx * channels + k) * height) * width;
     float *top_data = top + ((batch_idx * num_output + n) * height) * width;
 
-    // Add result on top of existing top (multiply with weight is 1 or 0)
+    // Add result on top of existing top (if alpha == 1.)
     const float *alpha = weight + (n * channels + k);
-    // caffe_gpu_axpy(height * width, alpha, bottom_data, top_data);
+    if (*alpha == 1.) {
+      for (int idx = 0; idx < height * width; ++idx) {
+        top_data[idx] += bottom_data[idx];
+      }
+    }
   }
 }
 

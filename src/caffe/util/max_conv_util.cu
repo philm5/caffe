@@ -94,9 +94,6 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
   const int y_tile_idx = (tile_idx / tiles_per_row);
   const int x_tile_idx = (tile_idx % tiles_per_row);
 
-
-  //printf("tile_idx %d, y %d, x %d\n", tile_idx, y_tile_idx, x_tile_idx);
-
   const int y_offset = y_tile_idx * tile_dim;
   const int x_offset = x_tile_idx * tile_dim;
 
@@ -186,9 +183,10 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
       }
     }
 
-    // we write in global memory, because we only acces each location once
+    // we write in global memory, because we only access each location once
     int top_y = y + y_offset;
     int top_x = x + x_offset;
+    // check if access is outside of valid bounds.
     if (top_y < height && top_x < width) {
       float *top_data = top + ((batch_idx * channels + k) * height) * width;
       const int top_idx = top_y * width + top_x;
@@ -247,7 +245,6 @@ void fast_max_convolution_gpu(const Dtype *bottom, const Dtype *weight, Dtype *t
   int tile_dim = sqrt(TITAN_NUM_THREADS);
   const int tiles_per_row = width / tile_dim + 1;
   const int tiles_per_col = height / tile_dim + 1;
-  //printf("tpr %d, tpc %d\n", tiles_per_row, tiles_per_col);
   int z_blocks = (tiles_per_col  * tiles_per_row);
 
   dim3 block_num(num, channels, z_blocks);
