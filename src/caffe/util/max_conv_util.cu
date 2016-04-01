@@ -95,7 +95,7 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
   const int x_tile_idx = (tile_idx % tiles_per_row);
 
 
-  printf("tile_idx %d, y %d, x %d\n", tile_idx, y_tile_idx, x_tile_idx);
+  //printf("tile_idx %d, y %d, x %d\n", tile_idx, y_tile_idx, x_tile_idx);
 
   const int y_offset = y_tile_idx * tile_dim;
   const int x_offset = x_tile_idx * tile_dim;
@@ -137,7 +137,7 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
       float *dst = shared_data + copy_offset;
       // case I  : we are at the end of a row/column in the image? --> fill 0s into shared mem
       // case II : we are before the beginning of a row/column in a the image? --> fill 0s into shared mem
-      if (src_y < 0 || src_x < 0 || src_x > width || src_y > height) {
+      if (src_y < 0 || src_x < 0 || src_x >= width || src_y >= height) {
         *dst = 0.;
       } else {
         *dst = bottom_data[(src_y * width) + src_x];
@@ -187,9 +187,13 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
     }
 
     // we write in global memory, because we only acces each location once
-    float *top_data = top + ((batch_idx * channels + k) * height) * width;
-    const int top_idx = (y + y_offset) * width + (x + x_offset);
-    top_data[top_idx] = max_val;
+    int top_y = y + y_offset;
+    int top_x = x + x_offset;
+    if (top_y < height && top_x < width) {
+      float *top_data = top + ((batch_idx * channels + k) * height) * width;
+      const int top_idx = top_y * width + top_x;
+      top_data[top_idx] = max_val;
+    }
   }
 }
 
@@ -243,7 +247,7 @@ void fast_max_convolution_gpu(const Dtype *bottom, const Dtype *weight, Dtype *t
   int tile_dim = sqrt(TITAN_NUM_THREADS);
   const int tiles_per_row = width / tile_dim + 1;
   const int tiles_per_col = height / tile_dim + 1;
-  printf("tpr %d, tpc %d\n", tiles_per_row, tiles_per_col);
+  //printf("tpr %d, tpc %d\n", tiles_per_row, tiles_per_col);
   int z_blocks = (tiles_per_col  * tiles_per_row);
 
   dim3 block_num(num, channels, z_blocks);
