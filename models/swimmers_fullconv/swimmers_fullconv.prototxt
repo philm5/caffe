@@ -2,8 +2,8 @@ name: "CaffeNet"
 input: "data"
 input_dim: 1
 input_dim: 3
-input_dim: 1800
 input_dim: 1440
+input_dim: 1800
 layer {
   name: "conv1"
   type: "Convolution"
@@ -231,25 +231,39 @@ layer {
     num_output: 152
   }
 }
+# layer {
+#   name: "upscale"
+#   type: "Deconvolution"
+#   bottom: "idprclasses"
+#   top: "upscale"
+#   convolution_param {
+#     num_output: 152
+#    group: 152
+#    stride: 14
+#    kernel_size: 28
+#    weight_filler {
+#       type: "bilinear"
+#    }
+#  }
+# }
 layer {
-  name: "upscale"
-  type: "Deconvolution"
+  name: "upscale2"
+  type: "Resize"
   bottom: "idprclasses"
-  top: "upscale"
-  convolution_param {
-    num_output: 152
-    group: 152
-    stride: 14
-    kernel_size: 28
-    weight_filler {
-       type: "bilinear"
-    }
+  top: "upscale2"
+  resize_param {
+    width_out: 720
+    height_out: 576
+    scale_x: 12.80
+    scale_y: 12.80
+    shift_x: 40
+    shift_y: 40
   }
 }
 layer {
   name: "idpr_dt"
   type: "MaxConvolution"
-  bottom: "upscale"
+  bottom: "upscale2"
   top: "idpr_dt"
   max_convolution_param {
     kernel_size: 35

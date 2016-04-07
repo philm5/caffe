@@ -306,7 +306,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 147 (last added: max_convolution_param)
+// LayerParameter next available layer-specific ID: 148 (last added: resize_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -398,6 +398,7 @@ message LayerParameter {
   optional WindowDataParameter window_data_param = 129;
   optional AddParameter add_layer_param = 146;
   optional MaxConvolutionParameter max_convolution_param = 147;
+  optional ResizeParameter resize_param = 148;
 }
 
 // Message that stores parameters used to apply transformation
@@ -627,6 +628,18 @@ message MaxConvolutionParameter {
   optional bool scale_term = 1 [default = true]; // whether to scale inputs beforehand. Corresponding weights have to be stored in blobs_[1]
   optional bool max_conv = 2 [default = true]; // whether to have max or min convolution
   optional uint32 kernel_size = 3; // The kernel size (square)
+}
+
+message ResizeParameter {
+  required uint32 height_out = 1;
+  required uint32 width_out = 2;
+  // If scale is set the bottom blob will be scaled by that factor. If the result is smaller than the output size, the rest is padded with zeros.
+  // Otherwise the overlapping part of the result will be clipped.
+  optional float scale_x = 3;
+  optional float scale_y = 4;
+  // Shifts the scaled result by x, y pixels in the top blob. Same handling as before: If some contents would overlap in the top blob, they are clipped.
+  optional uint32 shift_x = 5 [default = 0];
+  optional uint32 shift_y = 6 [default = 0];
 }
 
 message DataParameter {

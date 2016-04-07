@@ -273,6 +273,16 @@ void ClassifierSimple::Preprocess(const cv::Mat& img,
     << "Input channels are not wrapping the input layer of the network.";
 }
 
+cv::Mat heatmap(cv::Mat in) {
+  cv::Mat tmp, result;
+  double min, max;
+  cv::minMaxIdx(in, &min, &max);
+
+  in.convertTo(tmp, CV_8UC1, 255.0 / (max - min), -min);
+  cv::applyColorMap(tmp, result, cv::COLORMAP_JET);
+  return result;
+}
+
 int main(int argc, char** argv) {
   if (argc != 4) {
     std::cerr << "Usage: " << argv[0]
@@ -320,15 +330,34 @@ int main(int argc, char** argv) {
   resized = cv::Mat::zeros(576, 720, CV_32FC1);
   roi = resized( cv::Rect( RES_SHIFT, RES_SHIFT, round(result.cols * RES_RESIZE), round(result.rows * RES_RESIZE) ) );
   cv::resize( result, roi, cv::Size(roi.cols, roi.rows) );
-  cv::imshow("before-dt", resized);
+  cv::imshow("before-dt", heatmap(resized));
   cv::waitKey(0);
+
+
+  if (classifier.net_->blob_by_name("upscale2") != 0) {
+    // get added scaled stuff
+    output = classifier.net_->blob_by_name("upscale2");
+    num_outputs = output->shape(1);
+    cv::Mat *upscale = new cv::Mat[num_outputs];
+    for (int n = 0; n < num_outputs; ++n) {
+      cv::Mat tmp = cv::Mat(output->shape(2), output->shape(3), CV_32FC1);
+      const void *src = reinterpret_cast<const void *>(output->cpu_data() + output->offset(0, n, 0, 0));
+      memcpy(tmp.ptr(0), src, output->shape(2) * output->shape(3) * sizeof(float));
+      upscale[n] = tmp;
+    }
+
+    result = upscale[42];
+    cv::imshow("upscale", heatmap(result));
+    cv::waitKey(0);
+  }
+
+
 
   // show dt stuff
   result = res[42];
 
-  cv::imshow("out", result);
+  cv::imshow("out", heatmap(result));
   cv::waitKey(0);
-
   cv::Mat tmp;
   result.convertTo(tmp, CV_8UC3, 255.0);
   cv::imwrite("out_fast.png", tmp);
@@ -341,7 +370,7 @@ int main(int argc, char** argv) {
       resized = cv::Mat::zeros(576, 720, CV_32FC1);
       roi = resized( cv::Rect( RES_SHIFT, RES_SHIFT, round(result.cols * RES_RESIZE), round(result.rows * RES_RESIZE) ) );
       cv::resize( result, roi, cv::Size(roi.cols, roi.rows) );
-      cv::imshow("resized", resized);
+      cv::imshow("resized", heatmap(resized));
       cv::waitKey(0);
   }
 
