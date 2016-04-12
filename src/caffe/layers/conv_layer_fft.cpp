@@ -9,7 +9,9 @@
 #include "caffe/layer.hpp"
 #include "caffe/util/im2col.hpp"
 #include "caffe/util/math_functions.hpp"
-#include "caffe/vision_layers.hpp"
+#include "caffe/layers/conv_layer_fft.hpp"
+
+using namespace std;
 
 #ifndef USE_MKL
 // cgemm_batched is not available in atlas.... perhaps in openblas???
