@@ -280,7 +280,9 @@ cv::Mat heatmap(cv::Mat in) {
 
   in.convertTo(tmp, CV_8UC1, 255.0 / (max - min), -min);
   cv::applyColorMap(tmp, result, cv::COLORMAP_JET);
-  return result;
+  //return result;
+
+  return in;
 }
 
 int main(int argc, char** argv) {

@@ -34,6 +34,9 @@ class ResizeLayer : public Layer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
+
+  virtual void resize_cpu(const Dtype *bottom, Dtype *top);
+
   // int kernel_h_, kernel_w_;
   // int stride_h_, stride_w_;
   float scale_x_, scale_y_;

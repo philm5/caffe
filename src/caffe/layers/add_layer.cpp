@@ -74,7 +74,7 @@ void AddLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype *bottom_ptr = bottom[0]->cpu_data();
   Dtype *top_ptr = top[0]->mutable_cpu_data();
   // set mem to 0 before adding on top of it...
-  //caffe_memset(num_ * num_output_ * height_out_  * width_out_ * sizeof(Dtype), 0., top_ptr);
+  caffe_memset(num_ * num_output_ * height_out_  * width_out_ * sizeof(Dtype), 0., top_ptr);
   const Dtype *weight = this->blobs_[0]->cpu_data();
 
   // TODO: optmize loops?
@@ -83,9 +83,20 @@ void AddLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       for (int k = 0; k < channels_; ++k) {
         const Dtype *bottom_data = bottom_ptr + ((batch_idx * channels_ + k) * height_) * width_;
         Dtype *top_data = top_ptr + ((batch_idx * num_output_ + n) * height_) * width_;
+        
 
-        // Add result on top of existing top (multiply with weight is 1 or 0)
-        caffe_axpy(height_ * width_, weight[(n * channels_ + k)], bottom_data, top_data);
+
+        // Add result on top of existing top (if alpha == 1.)
+        const Dtype *alpha = weight + (n * channels_ + k);
+        if (*alpha == 1.) {
+          for (int idx = 0; idx < height_ * width_; ++idx) {
+            top_data[idx] += bottom_data[idx];
+          }
+        }
+//
+//
+//        // Add result on top of existing top (multiply with weight is 1 or 0)
+//        caffe_axpy(height_ * width_, weight[(n * channels_ + k)], bottom_data, top_data);
       }
     }
   }

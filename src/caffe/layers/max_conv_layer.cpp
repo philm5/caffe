@@ -118,7 +118,6 @@ void MaxConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 
     }
   }
-  LOG(ERROR) << "MaxConv Forward!";
 }
 
 template<typename Dtype>

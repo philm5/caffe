@@ -8,19 +8,24 @@ namespace caffe {
 // kernel methods
 
 template<typename Dtype>
+__device__ Dtype max(Dtype a, Dtype b);
+
+template<>
+__device__ float max<float>(float a, float b) {
+  return fmaxf(a, b);
+}
+
+template<>
+__device__ double max<double>(double a, double b) {
+  return fmax(a, b);
+}
+
+template<typename Dtype>
 __global__ void max_convolution_gpu_kernel(const Dtype *bottom,
                                            const Dtype *weight, Dtype *top,
                                            int kernel_h, int kernel_w,
                                            int kernel_radius, int channels,
-                                           int height, int width);
-
-template<>
-__global__ void max_convolution_gpu_kernel<float>(const float *bottom,
-                                                  const float *weight,
-                                                  float *top, int kernel_h,
-                                                  int kernel_w, int kernel_radius,
-                                                  int channels, int height,
-                                                  int width) {
+                                           int height, int width) {
 
   const int batch_idx = blockIdx.x;
   const int k = blockIdx.y;
@@ -31,12 +36,12 @@ __global__ void max_convolution_gpu_kernel<float>(const float *bottom,
     int y = hw / width;
     int x = hw % width;
 
-    const float *bottom_data = bottom
+    const Dtype *bottom_data = bottom
         + ((batch_idx * channels + k) * height) * width;
-    const float *kernel_weight_data = weight + k * kernel_h * kernel_w;
-    float *top_data = top + ((batch_idx * channels + k) * height) * width;
+    const Dtype *kernel_weight_data = weight + k * kernel_h * kernel_w;
+    Dtype *top_data = top + ((batch_idx * channels + k) * height) * width;
 
-    float max_val = FLT_MIN;
+    Dtype max_val = FLT_MIN;
     for (int q = 0; q < kernel_h; ++q) {
       for (int r = 0; r < kernel_w; ++r) {
         int y_bottom = y + (q - kernel_radius);
@@ -46,9 +51,9 @@ __global__ void max_convolution_gpu_kernel<float>(const float *bottom,
         if (!(y_bottom < 0 || x_bottom < 0 || y_bottom >= height
             || x_bottom >= width)) {
           // - for max conv and + for min conv ???
-          float tmp = bottom_data[y_bottom * width + x_bottom]
+          Dtype tmp = bottom_data[y_bottom * width + x_bottom]
               - kernel_weight_data[q * kernel_w + r];
-          max_val = fmaxf(tmp, max_val);
+          max_val = max(tmp, max_val);
         }
       }
     }
@@ -56,16 +61,22 @@ __global__ void max_convolution_gpu_kernel<float>(const float *bottom,
   }
 }
 
-template<>
+template
+__global__ void max_convolution_gpu_kernel<float>(const float *bottom,
+                                                  const float *weight,
+                                                  float *top, int kernel_h,
+                                                  int kernel_w, int kernel_radius,
+                                                  int channels, int height,
+                                                  int width);
+
+template
 __global__ void max_convolution_gpu_kernel<double>(const double *bottom,
                                                    const double *weight,
                                                    double *top, int kernel_h,
                                                    int kernel_w,
                                                    int kernel_radius,
                                                    int channels, int height,
-                                                   int width) {
- // TODO: implement double version...
-}
+                                                   int width);
 
 template<typename Dtype>
 __global__ void fast_max_convolution_gpu_kernel(const Dtype *bottom,
@@ -73,20 +84,11 @@ __global__ void fast_max_convolution_gpu_kernel(const Dtype *bottom,
                                                 int kernel_h, int kernel_w,
                                                 int kernel_radius, int channels,
                                                 int height, int width,
-                                                int tile_dim, int tiles_per_row, int shared_mem_length);
-
-
-template<>
-__global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
-                                                       const float *weight, float *top,
-                                                       int kernel_h, int kernel_w,
-                                                       int kernel_radius, int channels,
-                                                       int height, int width,
-                                                       int tile_dim, int tiles_per_row, int shared_mem_length) {
+                                                int tile_dim, int tiles_per_row, int shared_mem_length) {
   const int batch_idx = blockIdx.x;
   const int k = blockIdx.y;
 
-  const float *bottom_data = bottom
+  const Dtype *bottom_data = bottom
       + ((batch_idx * channels + k) * height) * width;
 
   // tiles are quadratically... get initial offset...
@@ -110,7 +112,8 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
 
 
   // We store a tile of the bottom data here + the kernel
-  extern __shared__ float shared_data[];
+  extern __shared__ float shared_mem[];
+  Dtype *shared_data = (Dtype *)&shared_mem;
 
   // every thread has to copy some amount of values from global to shared memory
   const int shared_data_size = shared_mem_length * shared_mem_length;
@@ -131,7 +134,7 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
    // don't copy data outside of the allocated space
     if (copy_offset < shared_data_size) {
       // find destination ptr
-      float *dst = shared_data + copy_offset;
+      Dtype *dst = shared_data + copy_offset;
       // case I  : we are at the end of a row/column in the image? --> fill 0s into shared mem
       // case II : we are before the beginning of a row/column in a the image? --> fill 0s into shared mem
       if (src_y < 0 || src_x < 0 || src_x >= width || src_y >= height) {
@@ -145,14 +148,14 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
   // write kernel to shared mem
   // ------------------------------
   // we use one array in the shared memory for both data and kernel (we only dynamically alloc one array from outside the kernel)
-  float *kernel = shared_data + shared_data_size;
+  Dtype *kernel = shared_data + shared_data_size;
   const int k_shared_mem_size = kernel_h * kernel_w;
   const int k_copy_count = (k_shared_mem_size / blockDim.x) + 1; // calculated outside !? e.g. [(50*50)/512] + 1 = 5
   // offset of current thread inside the kernel shared memory...
   const int k_inner_offset = threadIdx.x * k_copy_count;
 
   // offset to kernel
-  const float *kernel_weight_data = weight + k * kernel_h * kernel_w;
+  const Dtype *kernel_weight_data = weight + k * kernel_h * kernel_w;
 
   for (int i = 0; i < k_copy_count; ++i) {
     int idx = k_inner_offset + i;
@@ -170,16 +173,16 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
     int y = (hw / tile_dim);
     int x = (hw % tile_dim);
 
-    float max_val = FLT_MIN;
+    Dtype max_val = FLT_MIN;
     for (int q = 0; q < kernel_h; ++q) {
       for (int r = 0; r < kernel_w; ++r) {
         int y_bottom = y + q;
         int x_bottom = x + r;
 
           // - for max conv and + for min conv ???
-          float tmp = shared_data[y_bottom * shared_mem_length + x_bottom]
+          Dtype tmp = shared_data[y_bottom * shared_mem_length + x_bottom]
               - kernel[q * kernel_w + r];
-          max_val = fmaxf(tmp, max_val);
+          max_val = max(tmp, max_val);
       }
     }
 
@@ -188,7 +191,7 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
     int top_x = x + x_offset;
     // check if access is outside of valid bounds.
     if (top_y < height && top_x < width) {
-      float *top_data = top + ((batch_idx * channels + k) * height) * width;
+      Dtype *top_data = top + ((batch_idx * channels + k) * height) * width;
       const int top_idx = top_y * width + top_x;
       top_data[top_idx] = max_val;
     }
@@ -196,15 +199,22 @@ __global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
 }
 
 
-template<>
+template
+__global__ void fast_max_convolution_gpu_kernel<float>(const float *bottom,
+                                                       const float *weight, float *top,
+                                                       int kernel_h, int kernel_w,
+                                                       int kernel_radius, int channels,
+                                                       int height, int width,
+                                                       int tile_dim, int tiles_per_row, int shared_mem_length);
+
+
+template
 __global__ void fast_max_convolution_gpu_kernel<double>(const double *bottom,
                                                         const double *weight, double *top,
                                                         int kernel_h, int kernel_w,
                                                         int kernel_radius, int channels,
                                                         int height, int width,
-                                                        int tile_dim, int tiles_per_row, int shared_mem_length) {
-  // TODO: implement double version...
-}
+                                                        int tile_dim, int tiles_per_row, int shared_mem_length);
 
 
 // end of kernel methods
