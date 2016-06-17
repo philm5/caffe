@@ -6,6 +6,9 @@ template<typename Dtype>
 void MaxConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                                             const vector<Blob<Dtype>*>& top) {
 
+  CHECK_EQ(2, top.size()) << "Output must be 2 blobs. "
+  << "One for results and the other one for the origins of the max values.";
+
   CHECK_EQ(4, bottom[0]->num_axes())<< "Input must have 4 axes, "
   << "corresponding to (num, channels, height, width)";
   num_ = bottom[0]->num();
@@ -66,9 +69,17 @@ void MaxConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   }
   // Shape the tops.
   compute_output_shape();
-  for (int top_id = 0; top_id < top.size(); ++top_id) {
-    top[top_id]->Reshape(num_, num_output_, height_out_, width_out_);
-  }
+
+  vector<int> top_shape;
+  top_shape.push_back(num_);
+  top_shape.push_back(num_output_);
+  top_shape.push_back(height_out_);
+  top_shape.push_back(width_out_);
+
+  top[0]->Reshape(top_shape);
+  // we will store the coordinates, where the max values originated in the second top blob.
+  top_shape.push_back(2);
+  top[1]->Reshape(top_shape);
 }
 
 template<typename Dtype>
@@ -84,7 +95,7 @@ void MaxConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype *bottom_ptr = bottom[0]->cpu_data();
   const Dtype *kernel_weight_ptr = this->blobs_[0]->cpu_data();
   Dtype *top_ptr = top[0]->mutable_cpu_data();
-
+  Dtype *top_coords_ptr = top[1]->mutable_cpu_data();
   int k_half = (kernel_h_ - 1 ) / 2; // we only support quadratic kernels and assume uneven filter sizes...
 
   for(int batch_idx = 0; batch_idx < num_; ++batch_idx) {
@@ -98,6 +109,8 @@ void MaxConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       for (int y = 0; y < height_; ++y) {
         for (int x = 0; x < width_; ++x) {
           Dtype max_val = boost::math::tools::min_value<Dtype>();
+          int max_x = x;
+          int max_y = y;
           for (int q = 0; q < kernel_h_; ++q) {
             for (int r = 0; r < kernel_w_; ++r) {
               int y_bottom = y + (q - k_half);
@@ -107,10 +120,20 @@ void MaxConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
               if (! (y_bottom < 0 || x_bottom < 0 || y_bottom >= height_ || x_bottom >= width_)) {
                 // - for max conv and + for min conv ???
                 Dtype tmp = bottom_data[y_bottom * width_ + x_bottom] - kernel_weight_data[q * kernel_w_ + r];
-                max_val = std::max(tmp, max_val);
+                if (tmp > max_val) {
+                  // here we also remember where the maximum came from
+                  max_val = tmp;
+                  max_y = y_bottom;
+                  max_x = x_bottom;
+                }
               }
             }
           }
+
+          // * 2 because of the 5-th dim in the blob.
+          Dtype *top_coord = top_coords_ptr + (((batch_idx * channels_ + k) * height_+ y) * width_ + x) * 2;
+          top_coord[0] = max_y;
+          top_coord[1] = max_x;
 
           top_data[y * width_ + x] = max_val;
         }

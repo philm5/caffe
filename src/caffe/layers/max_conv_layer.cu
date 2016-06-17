@@ -11,8 +11,9 @@ void MaxConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype *bottom_ptr = bottom[0]->gpu_data();
   const Dtype *kernel_weight_ptr = this->blobs_[0]->gpu_data();
   Dtype *top_ptr = top[0]->mutable_gpu_data();
+  Dtype *top_origin = top[1]->mutable_gpu_data();
 
-  fast_max_convolution_gpu(bottom_ptr, kernel_weight_ptr, top_ptr, kernel_h_, kernel_w_,
+  fast_max_convolution_gpu(bottom_ptr, kernel_weight_ptr, top_ptr, top_origin, kernel_h_, kernel_w_,
                            num_, channels_, height_, width_);
 }
 

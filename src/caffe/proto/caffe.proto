@@ -399,6 +399,7 @@ message LayerParameter {
   optional AddParameter add_layer_param = 146;
   optional MaxConvolutionParameter max_convolution_param = 147;
   optional ResizeParameter resize_param = 148;
+  optional InferenceParameter inference_param = 149;
 }
 
 // Message that stores parameters used to apply transformation
@@ -640,6 +641,10 @@ message ResizeParameter {
   // Shifts the scaled result by x, y pixels in the top blob. Same handling as before: If some contents would overlap in the top blob, they are clipped.
   optional uint32 shift_x = 5 [default = 0];
   optional uint32 shift_y = 6 [default = 0];
+}
+
+message InferenceParameter {
+	required uint32 num_connections = 1;
 }
 
 message DataParameter {
