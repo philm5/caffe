@@ -117,6 +117,16 @@ void caffe_gpu_axpby<double>(const int N, const double alpha, const double* X,
 }
 
 template <>
+void caffe_gpu_amax<float>(const int N, const float *X, int *res) {
+  CUBLAS_CHECK(cublasIsamax(Caffe::cublas_handle(), N, X, 1, res));
+}
+
+template <>
+void caffe_gpu_amax<double>(const int N, const double *X, int *res) {
+  CUBLAS_CHECK(cublasIdamax(Caffe::cublas_handle(), N, X, 1, res));
+}
+
+template <>
 void caffe_gpu_dot<float>(const int n, const float* x, const float* y,
     float* out) {
   CUBLAS_CHECK(cublasSdot(Caffe::cublas_handle(), n, x, 1, y, 1, out));

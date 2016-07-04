@@ -69,8 +69,8 @@ __global__ void max_convolution_gpu_kernel(const Dtype *bottom,
     
     // * 2 because of the 5-th dim in the blob.
     Dtype *top_coord = top_origin + (((batch_idx * channels + k) * height + y) * width + x) * 2;
-    top_coord[0] = max_y;
-    top_coord[1] = max_x;
+    top_coord[0] = max_x;
+    top_coord[1] = max_y;
   }
 }
 
@@ -224,8 +224,8 @@ __global__ void fast_max_convolution_gpu_kernel(const Dtype *bottom,
 
       // * 2 because of the 5-th dim in the blob.
       Dtype *top_coord = top_origin + (((batch_idx * channels + k) * height + top_y) * width + top_x) * 2;
-      top_coord[0] = max_y;
-      top_coord[1] = max_x;
+      top_coord[0] = max_x;
+      top_coord[1] = max_y;
     }
   }
 }

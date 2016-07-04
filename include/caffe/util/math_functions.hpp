@@ -170,6 +170,9 @@ template <typename Dtype>
 void caffe_gpu_axpby(const int N, const Dtype alpha, const Dtype* X,
     const Dtype beta, Dtype* Y);
 
+template <typename Dtype>
+void caffe_gpu_amax(const int N, const Dtype *X, int *res);
+
 void caffe_gpu_memcpy(const size_t N, const void *X, void *Y);
 
 template <typename Dtype>

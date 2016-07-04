@@ -1,4 +1,5 @@
 #include "caffe/layers/max_conv_layer.hpp"
+#include "boost/math/tools/precision.hpp"
 
 namespace caffe {
 
@@ -132,8 +133,8 @@ void MaxConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 
           // * 2 because of the 5-th dim in the blob.
           Dtype *top_coord = top_coords_ptr + (((batch_idx * channels_ + k) * height_+ y) * width_ + x) * 2;
-          top_coord[0] = max_y;
-          top_coord[1] = max_x;
+          top_coord[0] = max_x;
+          top_coord[1] = max_y;
 
           top_data[y * width_ + x] = max_val;
         }

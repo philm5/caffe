@@ -266,7 +266,7 @@ layer {
   top: "idpr_dt"
   top: "max_vals"
   max_convolution_param {
-    kernel_size: 35
+    kernel_size: 51
   }
 }
 layer {

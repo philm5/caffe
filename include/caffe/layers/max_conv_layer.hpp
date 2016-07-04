@@ -10,7 +10,6 @@
 #include "caffe/layer.hpp"
 #include "caffe/proto/caffe.pb.h"
 
-#include "boost/math/tools/precision.hpp"
 
 namespace caffe {
 
